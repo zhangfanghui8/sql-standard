@@ -30,6 +30,7 @@ public class MybatisPlusGlobleConfig implements InitializingBean, ApplicationCon
     private ApplicationContext applicationContext;
 
     @Bean
+    @ConditionalOnMissingBean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
         interceptor.addInnerInterceptor(new CustomerIllegalSQLInterceptor(path));

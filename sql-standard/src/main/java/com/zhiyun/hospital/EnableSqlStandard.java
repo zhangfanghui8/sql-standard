@@ -1,6 +1,6 @@
 package com.zhiyun.hospital;
 
-import com.zhiyun.hospital.config.MybatisPlusGlobleConfig;
+import com.zhiyun.hospital.config.MybatisPlusGlobalConfig;
 import org.springframework.context.annotation.Import;
 
 import java.lang.annotation.*;
@@ -13,7 +13,7 @@ import java.lang.annotation.*;
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-@Import(value = MybatisPlusGlobleConfig.class)
+@Import(value = MybatisPlusGlobalConfig.class)
 public @interface EnableSqlStandard {
 
     String value() default "";

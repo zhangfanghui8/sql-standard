@@ -12,8 +12,10 @@ import org.apache.ibatis.executor.statement.StatementHandler;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.mapping.SqlSource;
+import org.apache.ibatis.reflection.MetaObject;
+import org.apache.ibatis.reflection.ReflectionException;
+import org.apache.ibatis.reflection.SystemMetaObject;
 import org.apache.ibatis.scripting.xmltags.DynamicSqlSource;
-import org.apache.ibatis.scripting.xmltags.MixedSqlNode;
 import org.apache.ibatis.scripting.xmltags.TextSqlNode;
 
 import java.lang.reflect.Field;
@@ -40,7 +42,7 @@ public class BlockAttackInnerBoostInterceptor extends BlockAttackInnerIntercepto
     /**
      * 缓存验证结果，提高性能
      */
-    private static final Set<String> cacheValidResult = new HashSet<>();
+    private static final Set<String> cacheValidResult = new HashSet<>(64);
 
     @Override
     protected void checkWhere(Expression where, String ex) {
@@ -74,29 +76,27 @@ public class BlockAttackInnerBoostInterceptor extends BlockAttackInnerIntercepto
             logger.debug("该SQL已验证，无需再次验证，，SQL:" + originalSql);
             return;
         }
-         //拦截使用$的sql
+        //拦截使用$的sql
         try {
             MappedStatement ms = handler.mappedStatement();
             SqlSource sqlSource = ms.getSqlSource();
             if (sqlSource instanceof DynamicSqlSource){
-                Object rootSqlNode = getPrivateParam(sqlSource, "rootSqlNode");
-                if (rootSqlNode instanceof MixedSqlNode){
-                    Object contents = getPrivateParam(rootSqlNode, "contents");
-                    if(contents instanceof List){
-                        List<Object> sqlNodes = (List<Object>)contents;
-                        for (Object node : sqlNodes) {
-                            //如果是TextSqlNode则表明原始SQL种存在$，打印该SQL并抛出异常
-                            if (node instanceof TextSqlNode){
-                                Object o2 = getPrivateParam(node, "text");
-                                log.warn("替换参数前的SQL，$符号不建议使用 SQL:{}",o2);
-                                throw new MybatisPlusException("非法SQL，禁止使用$符");
-                            }
+                MetaObject metaObject = SystemMetaObject.forObject(sqlSource);
+                Object contents = metaObject.getValue("rootSqlNode.contents");
+                if(contents instanceof List){
+                    List<Object> sqlNodes = (List<Object>)contents;
+                    for (Object node : sqlNodes) {
+                        //如果是TextSqlNode则表明原始SQL种存在$，打印该SQL并抛出异常
+                        if (node instanceof TextSqlNode){
+                            Object o2 = getPrivateParam(node, "text");
+                            log.warn("替换参数前的SQL，$符号不建议使用 SQL:{}",o2);
+                            throw new MybatisPlusException("非法SQL，禁止使用$符");
                         }
                     }
                 }
             }
-        } catch (NoSuchFieldException | IllegalAccessException ex) {
-            log.error("Mybatis-Plus 拦截异常",ex);
+        } catch (NoSuchFieldException | IllegalAccessException | ReflectionException ex) {
+            log.error("Mybatis-Plus 拦截器 拦截异常 | originalSql:{}",originalSql,ex);
             throw new MybatisPlusException("Mybatis-Plus 拦截异常");
         }
         //继续完成父类的方法
