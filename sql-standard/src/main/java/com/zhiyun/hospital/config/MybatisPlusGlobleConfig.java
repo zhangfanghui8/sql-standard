@@ -1,7 +1,9 @@
 package com.zhiyun.hospital.config;
 
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
+import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.zhiyun.hospital.EnableSqlStandard;
+import com.zhiyun.hospital.interceptor.BlockAttackInnerBoostInterceptor;
 import com.zhiyun.hospital.interceptor.CustomerIllegalSQLInterceptor;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.springframework.beans.BeansException;
@@ -27,14 +29,12 @@ public class MybatisPlusGlobleConfig implements InitializingBean, ApplicationCon
     private String path = null;
     private ApplicationContext applicationContext;
 
-    /**
-     * lllegal sql interceptor
-     *
-     * @return
-     */
     @Bean
-    public CustomerIllegalSQLInterceptor customerIllegalSQLInterceptor() {
-        return new CustomerIllegalSQLInterceptor(path);
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        interceptor.addInnerInterceptor(new CustomerIllegalSQLInterceptor(path));
+        interceptor.addInnerInterceptor(new BlockAttackInnerBoostInterceptor());
+        return interceptor;
     }
 
     @Override

@@ -2,7 +2,6 @@ package com.zhiyun.hospital.interceptor;
 
 
 import com.baomidou.mybatisplus.core.exceptions.MybatisPlusException;
-import com.baomidou.mybatisplus.core.toolkit.Assert;
 import com.baomidou.mybatisplus.core.toolkit.EncryptUtils;
 import com.baomidou.mybatisplus.core.toolkit.PluginUtils;
 import com.baomidou.mybatisplus.extension.plugins.inner.BlockAttackInnerInterceptor;
@@ -53,7 +52,9 @@ public class BlockAttackInnerBoostInterceptor extends BlockAttackInnerIntercepto
             Expression leftExpression = equalsTo.getLeftExpression();
             Expression rightExpression = equalsTo.getRightExpression();
             boolean logicDelCheck = "deleted".equals(leftExpression.toString()) && "0".equals(rightExpression.toString());
-            Assert.isFalse(logicDelCheck, ex);
+            if(logicDelCheck){
+                throw new MybatisPlusException(ex);
+            }
         }
     }
 
