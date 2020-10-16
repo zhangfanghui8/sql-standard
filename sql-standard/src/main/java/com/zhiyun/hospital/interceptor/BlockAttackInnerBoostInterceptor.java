@@ -68,6 +68,9 @@ public class BlockAttackInnerBoostInterceptor extends BlockAttackInnerIntercepto
      */
     @Override
     public void beforePrepare(StatementHandler sh, Connection connection, Integer transactionTimeout) {
+        //父类方法先执行，保证@InterceptorIgnore有效
+        super.beforePrepare(sh,connection,transactionTimeout);
+
         PluginUtils.MPStatementHandler handler = PluginUtils.mpStatementHandler(sh);
         BoundSql boundSql = handler.boundSql();
         String originalSql = boundSql.getSql();
@@ -99,8 +102,6 @@ public class BlockAttackInnerBoostInterceptor extends BlockAttackInnerIntercepto
             log.error("Mybatis-Plus 拦截器 拦截异常 | originalSql:{}",originalSql,ex);
             throw new MybatisPlusException("Mybatis-Plus 拦截异常");
         }
-        //继续完成父类的方法
-        super.beforePrepare(sh,connection,transactionTimeout);
         //缓存验证结果
         cacheValidResult.add(md5Base64);
     }
