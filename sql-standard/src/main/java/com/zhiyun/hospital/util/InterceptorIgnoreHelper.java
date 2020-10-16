@@ -1,8 +1,10 @@
 package com.zhiyun.hospital.util;
 
 import com.zhiyun.hospital.InterceptorIgnore;
+import com.zhiyun.hospital.exception.SqlStandardException;
 import lombok.Builder;
 import lombok.Data;
+import org.springframework.util.StringUtils;
 
 import java.lang.reflect.Method;
 import java.util.Map;
@@ -42,7 +44,7 @@ public class InterceptorIgnoreHelper {
      */
     public static void initSqlParserInfoCache(InterceptorIgnoreCache mapperAnnotation, String mapperClassName, Method method) {
         InterceptorIgnore ignore = method.getAnnotation(InterceptorIgnore.class);
-        final String key = mapperClassName.concat(StringPool.DOT).concat(method.getName());
+        final String key = mapperClassName.concat(".").concat(method.getName());
         if (ignore != null) {
             InterceptorIgnoreCache methodCache = buildInterceptorIgnoreCache(ignore);
             if (mapperAnnotation == null) {
@@ -90,15 +92,13 @@ public class InterceptorIgnoreHelper {
 
     private static InterceptorIgnoreCache buildInterceptorIgnoreCache(InterceptorIgnore ignore) {
         return InterceptorIgnoreCache.builder()
-            .tenantLine(getBoolean(ignore.tenantLine()))
-            .dynamicTableName(getBoolean(ignore.dynamicTableName()))
             .blockAttack(getBoolean(ignore.blockAttack()))
             .illegalSql(getBoolean(ignore.illegalSql()))
             .build();
     }
 
     private static Boolean getBoolean(String value) {
-        if (StringUtils.isBlank(value)) {
+        if (StringUtils.isEmpty(value)) {
             return null;
         }
         if ("1".equals(value) || "true".equals(value) || "on".equals(value)) {
@@ -107,7 +107,7 @@ public class InterceptorIgnoreHelper {
         if ("0".equals(value) || "false".equals(value) || "off".equals(value)) {
             return false;
         }
-        throw ExceptionUtils.mpe("not support this value of \"%s\"", value);
+        throw new SqlStandardException(String.format("not support this value of \"%s\"", value));
     }
 
     private static Boolean chooseBoolean(Boolean mapper, Boolean method) {

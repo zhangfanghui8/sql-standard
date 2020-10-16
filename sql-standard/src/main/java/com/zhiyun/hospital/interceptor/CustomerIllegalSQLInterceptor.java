@@ -1,11 +1,5 @@
 package com.zhiyun.hospital.interceptor;
 
-import com.baomidou.mybatisplus.core.exceptions.SqlStandardException;
-import com.baomidou.mybatisplus.core.parser.SqlParserHelper;
-import com.baomidou.mybatisplus.core.plugins.InterceptorIgnoreHelper;
-import com.baomidou.mybatisplus.core.toolkit.*;
-import com.baomidou.mybatisplus.extension.parser.JsqlParserSupport;
-import com.baomidou.mybatisplus.extension.plugins.inner.InnerInterceptor;
 import com.zhiyun.hospital.exception.SqlStandardException;
 import com.zhiyun.hospital.util.EncryptUtils;
 import com.zhiyun.hospital.util.PluginUtils;
@@ -31,8 +25,8 @@ import org.apache.ibatis.plugin.Interceptor;
 import org.apache.ibatis.plugin.Intercepts;
 import org.apache.ibatis.plugin.Invocation;
 import org.apache.ibatis.plugin.Signature;
-import org.apache.ibatis.reflection.MetaObject;
-import org.apache.ibatis.reflection.SystemMetaObject;
+import org.springframework.util.Assert;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.sql.Connection;
@@ -72,7 +66,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * @date 2020/10/15 18:01
  */
 @Intercepts({@Signature(type = StatementHandler.class, method = "prepare", args = {Connection.class, Integer.class})})
-public class CustomerIllegalSQLInterceptor implements Interceptor {
+public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements Interceptor {
 
     private static final Log logger = LogFactory.getLog(CustomerIllegalSQLInterceptor.class);
 
@@ -84,69 +78,11 @@ public class CustomerIllegalSQLInterceptor implements Interceptor {
     /**
      * 缓存表的索引信息
      */
-    private static final Map<String, List<CustomerIllegalSQLInterceptor.IndexInfo>> indexInfoMap = new ConcurrentHashMap<>();
+    private static final Map<String, List<CustomerIllegalSQLInterceptor.IndexInfo>> indexInfoMap =
+        new ConcurrentHashMap<>();
 
-    public CustomerIllegalSQLInterceptor(String path){
+    public CustomerIllegalSQLInterceptor(String path) {
         this.path = path;
-    }
-
-    @Override
-    public void beforePrepare(StatementHandler sh, Connection connection, Integer transactionTimeout) {
-        PluginUtils.MPStatementHandler mpStatementHandler = z.mpStatementHandler(sh);
-        MappedStatement ms = mpStatementHandler.mappedStatement();
-        SqlCommandType sct = ms.getSqlCommandType();
-        if (sct == SqlCommandType.INSERT || InterceptorIgnoreHelper.willIgnoreIllegalSql(ms.getId())
-            || SqlParserHelper.getSqlParserInfo(ms)) {
-            return;
-        }
-        if(StringUtils.isBlank(path) || ms.getId().equals(path)){
-            BoundSql boundSql = mpStatementHandler.boundSql();
-            String originalSql = boundSql.getSql();
-            logger.debug("检查SQL是否合规，SQL:" + originalSql);
-            String md5Base64 = EncryptUtils.md5Base64(originalSql);
-            if (cacheValidResult.contains(md5Base64)) {
-                logger.debug("该SQL已验证，无需再次验证，，SQL:" + originalSql);
-                return;
-            }
-            parserSingle(originalSql, connection);
-            //缓存验证结果
-            cacheValidResult.add(md5Base64);
-        }
-    }
-
-    @Override
-    protected void processSelect(Select select, int index, Object obj) {
-        PlainSelect plainSelect = (PlainSelect) select.getSelectBody();
-        Expression where = plainSelect.getWhere();
-        Assert.notNull(where, "非法SQL，必须要有where条件");
-        Table table = (Table) plainSelect.getFromItem();
-        List<Join> joins = plainSelect.getJoins();
-        List<SelectItem> selectItem = plainSelect.getSelectItems();
-        if(CollectionUtils.isNotEmpty(selectItem)){
-            validSelectItem(selectItem);
-        }
-        validWhere(where, table, (Connection) obj);
-        validJoins(joins, table, (Connection) obj);
-    }
-
-    @Override
-    protected void processUpdate(Update update, int index, Object obj) {
-        Expression where = update.getWhere();
-        Assert.notNull(where, "非法SQL，必须要有where条件");
-        Table table = update.getTable();
-        List<Join> joins = update.getJoins();
-        validWhere(where, table, (Connection) obj);
-        validJoins(joins, table, (Connection) obj);
-    }
-
-    @Override
-    protected void processDelete(Delete delete, int index, Object obj) {
-        Expression where = delete.getWhere();
-        Assert.notNull(where, "非法SQL，必须要有where条件");
-        Table table = delete.getTable();
-        List<Join> joins = delete.getJoins();
-        validWhere(where, table, (Connection) obj);
-        validJoins(joins, table, (Connection) obj);
     }
 
     /**
@@ -157,29 +93,29 @@ public class CustomerIllegalSQLInterceptor implements Interceptor {
     private void validExpression(Expression expression) {
         //where条件使用了 or 关键字
         if (expression instanceof OrExpression) {
-            OrExpression orExpression = (OrExpression) expression;
+            OrExpression orExpression = (OrExpression)expression;
             throw new SqlStandardException("非法SQL，where条件中不能使用【or】关键字，错误or信息：" + orExpression.toString());
         } else if (expression instanceof NotEqualsTo) {
-            NotEqualsTo notEqualsTo = (NotEqualsTo) expression;
+            NotEqualsTo notEqualsTo = (NotEqualsTo)expression;
             throw new SqlStandardException("非法SQL，where条件中不能使用【!=】关键字，错误!=信息：" + notEqualsTo.toString());
         } else if (expression instanceof BinaryExpression) {
-            BinaryExpression binaryExpression = (BinaryExpression) expression;
+            BinaryExpression binaryExpression = (BinaryExpression)expression;
             // TODO 升级 jsqlparser 后待实现
             //            if (binaryExpression.isNot()) {
             //                throw new SqlStandardException("非法SQL，where条件中不能使用【not】关键字，错误not信息：" + binaryExpression.toString());
             //            }
             if (binaryExpression.getLeftExpression() instanceof Function) {
-                Function function = (Function) binaryExpression.getLeftExpression();
+                Function function = (Function)binaryExpression.getLeftExpression();
                 throw new SqlStandardException("非法SQL，where条件中不能使用数据库函数，错误函数信息：" + function.toString());
             }
             if (binaryExpression.getRightExpression() instanceof SubSelect) {
-                SubSelect subSelect = (SubSelect) binaryExpression.getRightExpression();
+                SubSelect subSelect = (SubSelect)binaryExpression.getRightExpression();
                 throw new SqlStandardException("非法SQL，where条件中不能使用子查询，错误子查询SQL信息：" + subSelect.toString());
             }
         } else if (expression instanceof InExpression) {
-            InExpression inExpression = (InExpression) expression;
+            InExpression inExpression = (InExpression)expression;
             if (inExpression.getRightItemsList() instanceof SubSelect) {
-                SubSelect subSelect = (SubSelect) inExpression.getRightItemsList();
+                SubSelect subSelect = (SubSelect)inExpression.getRightItemsList();
                 throw new SqlStandardException("非法SQL，where条件中不能使用子查询，错误子查询SQL信息：" + subSelect.toString());
             }
         }
@@ -194,13 +130,13 @@ public class CustomerIllegalSQLInterceptor implements Interceptor {
      * @param connection ignore
      */
     private void validJoins(List<Join> joins, Table table, Connection connection) {
-        if(CollectionUtils.isNotEmpty(joins) && joins.size() >= 3){
+        if (!CollectionUtils.isEmpty(joins) && joins.size() >= 3) {
             throw new SqlStandardException("非法SQL，超过三个表禁止join");
         }
         //允许执行join，验证jion是否使用索引等等
         if (joins != null) {
             for (Join join : joins) {
-                Table rightTable = (Table) join.getRightItem();
+                Table rightTable = (Table)join.getRightItem();
                 Expression expression = join.getOnExpression();
                 validWhere(expression, table, rightTable, connection);
             }
@@ -264,23 +200,23 @@ public class CustomerIllegalSQLInterceptor implements Interceptor {
         validExpression(expression);
         if (expression instanceof BinaryExpression) {
             //获得左边表达式
-            Expression leftExpression = ((BinaryExpression) expression).getLeftExpression();
+            Expression leftExpression = ((BinaryExpression)expression).getLeftExpression();
             validExpression(leftExpression);
 
             //如果左边表达式为Column对象，则直接获得列名
             if (leftExpression instanceof Column) {
-                Expression rightExpression = ((BinaryExpression) expression).getRightExpression();
+                Expression rightExpression = ((BinaryExpression)expression).getRightExpression();
                 if (joinTable != null && rightExpression instanceof Column) {
-                    if (Objects.equals(((Column) rightExpression).getTable().getName(), table.getAlias().getName())) {
-                        validUseIndex(table, ((Column) rightExpression).getColumnName(), connection);
-                        validUseIndex(joinTable, ((Column) leftExpression).getColumnName(), connection);
+                    if (Objects.equals(((Column)rightExpression).getTable().getName(), table.getAlias().getName())) {
+                        validUseIndex(table, ((Column)rightExpression).getColumnName(), connection);
+                        validUseIndex(joinTable, ((Column)leftExpression).getColumnName(), connection);
                     } else {
-                        validUseIndex(joinTable, ((Column) rightExpression).getColumnName(), connection);
-                        validUseIndex(table, ((Column) leftExpression).getColumnName(), connection);
+                        validUseIndex(joinTable, ((Column)rightExpression).getColumnName(), connection);
+                        validUseIndex(table, ((Column)leftExpression).getColumnName(), connection);
                     }
                 } else {
                     //获得列名
-                    validUseIndex(table, ((Column) leftExpression).getColumnName(), connection);
+                    validUseIndex(table, ((Column)leftExpression).getColumnName(), connection);
                 }
             }
             //如果BinaryExpression，进行迭代
@@ -289,21 +225,24 @@ public class CustomerIllegalSQLInterceptor implements Interceptor {
             }
 
             //获得右边表达式，并分解
-            Expression rightExpression = ((BinaryExpression) expression).getRightExpression();
+            Expression rightExpression = ((BinaryExpression)expression).getRightExpression();
             validExpression(rightExpression);
         }
     }
 
     /**
      * 验证select item 部分规则
+     *
      * @param selectItems
      */
     private static void validSelectItem(List<SelectItem> selectItems) {
         //select语句禁止使用count(*)
-        if(selectItems.stream().filter(f->(f.toString().toLowerCase().contains("count(*)"))).findFirst().isPresent()){
+        if (selectItems.stream().filter(f -> (f.toString().toLowerCase().contains("count(*)"))).findFirst()
+            .isPresent()) {
             throw new SqlStandardException("非法SQL，SQL使用到'count(*)'");
         }
     }
+
     /**
      * 得到表的索引信息
      *
@@ -312,7 +251,8 @@ public class CustomerIllegalSQLInterceptor implements Interceptor {
      * @param conn      ignore
      * @return ignore
      */
-    public List<CustomerIllegalSQLInterceptor.IndexInfo> getIndexInfos(String dbName, String tableName, Connection conn) {
+    public List<CustomerIllegalSQLInterceptor.IndexInfo> getIndexInfos(String dbName, String tableName,
+        Connection conn) {
         return getIndexInfos(null, dbName, tableName, conn);
     }
 
@@ -325,30 +265,32 @@ public class CustomerIllegalSQLInterceptor implements Interceptor {
      * @param conn      ignore
      * @return ignore
      */
-    public List<CustomerIllegalSQLInterceptor.IndexInfo> getIndexInfos(String key, String dbName, String tableName, Connection conn) {
+    public List<CustomerIllegalSQLInterceptor.IndexInfo> getIndexInfos(String key, String dbName, String tableName,
+        Connection conn) {
         List<CustomerIllegalSQLInterceptor.IndexInfo> indexInfos = null;
-        if (StringUtils.isNotBlank(key)) {
+        if (!StringUtils.isEmpty(key)) {
             indexInfos = indexInfoMap.get(key);
         }
         if (indexInfos == null || indexInfos.isEmpty()) {
             ResultSet rs;
             try {
                 DatabaseMetaData metadata = conn.getMetaData();
-                String catalog = StringUtils.isBlank(dbName) ? conn.getCatalog() : dbName;
-                String schema = StringUtils.isBlank(dbName) ? conn.getSchema() : dbName;
+                String catalog = StringUtils.isEmpty(dbName) ? conn.getCatalog() : dbName;
+                String schema = StringUtils.isEmpty(dbName) ? conn.getSchema() : dbName;
                 rs = metadata.getIndexInfo(catalog, schema, tableName, false, true);
                 indexInfos = new ArrayList<>();
                 while (rs.next()) {
                     //索引中的列序列号等于1，才有效
                     if (Objects.equals(rs.getString(8), "1")) {
-                        CustomerIllegalSQLInterceptor.IndexInfo indexInfo = new CustomerIllegalSQLInterceptor.IndexInfo();
+                        CustomerIllegalSQLInterceptor.IndexInfo indexInfo =
+                            new CustomerIllegalSQLInterceptor.IndexInfo();
                         indexInfo.setDbName(rs.getString(1));
                         indexInfo.setTableName(rs.getString(3));
                         indexInfo.setColumnName(rs.getString(9));
                         indexInfos.add(indexInfo);
                     }
                 }
-                if (StringUtils.isNotBlank(key)) {
+                if (!StringUtils.isEmpty(key)) {
                     indexInfoMap.put(key, indexInfos);
                 }
             } catch (SQLException e) {
@@ -363,12 +305,12 @@ public class CustomerIllegalSQLInterceptor implements Interceptor {
         StatementHandler statementHandler = PluginUtils.realTarget(invocation.getTarget());
         PluginUtils.MPStatementHandler mpStatementHandler = PluginUtils.mpStatementHandler(statementHandler);
         MappedStatement ms = mpStatementHandler.mappedStatement();
-        Connection connection = (Connection) invocation.getArgs()[0];
+        Connection connection = (Connection)invocation.getArgs()[0];
         // 如果是insert操作 不进行验证
-        if (SqlCommandType.INSERT.equals(ms.getSqlCommandType()) ) {
+        if (SqlCommandType.INSERT.equals(ms.getSqlCommandType())) {
             return invocation.proceed();
         }
-        if(StringUtils.isEmpty(path) || ms.getId().equals(path)){
+        if (StringUtils.isEmpty(path) || ms.getId().equals(path)) {
             BoundSql boundSql = mpStatementHandler.boundSql();
             String originalSql = boundSql.getSql();
             logger.debug("检查SQL是否合规，SQL:" + originalSql);
@@ -381,9 +323,42 @@ public class CustomerIllegalSQLInterceptor implements Interceptor {
             //缓存验证结果
             cacheValidResult.add(md5Base64);
         }
+        return invocation.proceed();
+    }
+
+    @Override
+    protected void processSelect(Select select, int index, Object obj) {
+        PlainSelect plainSelect = (PlainSelect)select.getSelectBody();
+        Expression where = plainSelect.getWhere();
+        Assert.notNull(where, "非法SQL，必须要有where条件");
+        Table table = (Table)plainSelect.getFromItem();
+        List<Join> joins = plainSelect.getJoins();
+        validWhere(where, table, (Connection)obj);
+        validJoins(joins, table, (Connection)obj);
+    }
+
+    @Override
+    protected void processUpdate(Update update, int index, Object obj) {
+        Expression where = update.getWhere();
+        Assert.notNull(where, "非法SQL，必须要有where条件");
+        Table table = update.getTable();
+        List<Join> joins = update.getJoins();
+        validWhere(where, table, (Connection)obj);
+        validJoins(joins, table, (Connection)obj);
+    }
+
+    @Override
+    protected void processDelete(Delete delete, int index, Object obj) {
+        Expression where = delete.getWhere();
+        Assert.notNull(where, "非法SQL，必须要有where条件");
+        Table table = delete.getTable();
+        List<Join> joins = delete.getJoins();
+        validWhere(where, table, (Connection)obj);
+        validJoins(joins, table, (Connection)obj);
     }
 
     /**
+     * parserMulti
      * 索引对象
      */
     @Data
