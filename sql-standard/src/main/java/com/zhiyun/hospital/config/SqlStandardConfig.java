@@ -46,6 +46,7 @@ public class SqlStandardConfig implements InitializingBean, ApplicationContextAw
         configuration.addInterceptor(new BlockAttackInnerBoostInterceptor());
         configuration.addInterceptor(new CustomerIllegalSQLInterceptor(path));
     }
+
     @Override
     public void afterPropertiesSet() throws Exception {
         List<Method> methodList = null;

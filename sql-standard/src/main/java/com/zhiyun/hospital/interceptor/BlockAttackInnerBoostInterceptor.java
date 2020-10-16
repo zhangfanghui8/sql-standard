@@ -1,6 +1,5 @@
 package com.zhiyun.hospital.interceptor;
 
-
 import com.zhiyun.hospital.exception.SqlStandardException;
 import com.zhiyun.hospital.util.Assert;
 import com.zhiyun.hospital.util.EncryptUtils;
@@ -35,7 +34,7 @@ import java.util.Set;
 /**
  * 基于Mybatis-Plus提供的 BlockAttackInnerInterceptor 进行定制修改
  * 攻击 SQL 阻断解析器,防止全表更新与删除
- *
+ * <p>
  * 若有需求使用全表更新，请手动写SQL
  * 并添加忽略插件拦截器注解 {@link com.zhiyun.hospital.InterceptorIgnore}
  * 其中 blockAttack = true
@@ -45,13 +44,11 @@ import java.util.Set;
  * @author xiaozhikuan
  * @since mybatis
  */
-@Intercepts(
-        {
-                @Signature(type = Executor.class, method = "update", args = {MappedStatement.class, Object.class}),
-                @Signature(type = Executor.class, method = "query", args = {MappedStatement.class, Object.class, RowBounds.class, ResultHandler.class}),
-                @Signature(type = Executor.class, method = "query", args = {MappedStatement.class, Object.class, RowBounds.class, ResultHandler.class, CacheKey.class, BoundSql.class}),
-        }
-)
+@Intercepts({@Signature(type = Executor.class, method = "update", args = {MappedStatement.class, Object.class}),
+    @Signature(type = Executor.class, method = "query", args = {MappedStatement.class, Object.class, RowBounds.class,
+        ResultHandler.class}),
+    @Signature(type = Executor.class, method = "query", args = {MappedStatement.class, Object.class, RowBounds.class,
+        ResultHandler.class, CacheKey.class, BoundSql.class}),})
 @Slf4j
 public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implements Interceptor {
     /**
@@ -59,11 +56,9 @@ public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implemen
      */
     private static final Set<String> cacheValidResult = new HashSet<>(64);
 
-
-
     @Override
     public Object intercept(Invocation invocation) throws Throwable {
-        MappedStatement ms = (MappedStatement) invocation.getArgs()[0];
+        MappedStatement ms = (MappedStatement)invocation.getArgs()[0];
         Object parameter = null;
         if (invocation.getArgs().length > 1) {
             parameter = invocation.getArgs()[1];
@@ -79,7 +74,7 @@ public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implemen
         }
         SqlCommandType sct = ms.getSqlCommandType();
         if (sct == SqlCommandType.UPDATE || sct == SqlCommandType.DELETE) {
-            if (InterceptorIgnoreHelper.willIgnoreBlockAttack(ms.getId())){
+            if (InterceptorIgnoreHelper.willIgnoreBlockAttack(ms.getId())) {
                 parserMulti(boundSql.getSql(), null);
                 //缓存验证结果
                 cacheValidResult.add(md5Base64);
@@ -87,27 +82,26 @@ public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implemen
             }
         }
 
-
         //拦截使用$的sql
         try {
             SqlSource sqlSource = ms.getSqlSource();
-            if (sqlSource instanceof DynamicSqlSource){
+            if (sqlSource instanceof DynamicSqlSource) {
                 MetaObject metaObject = SystemMetaObject.forObject(sqlSource);
                 Object contents = metaObject.getValue("rootSqlNode.contents");
-                if(contents instanceof List){
+                if (contents instanceof List) {
                     List<Object> sqlNodes = (List<Object>)contents;
                     for (Object node : sqlNodes) {
                         //如果是TextSqlNode则表明原始SQL种存在$，打印该SQL并抛出异常
-                        if (node instanceof TextSqlNode){
+                        if (node instanceof TextSqlNode) {
                             Object o2 = getPrivateParam(node, "text");
-                            log.warn("替换参数前的SQL，$符号不建议使用 SQL:{}",o2);
+                            log.warn("替换参数前的SQL，$符号不建议使用 SQL:{}", o2);
                             throw new SqlStandardException("非法SQL，禁止使用$符");
                         }
                     }
                 }
             }
         } catch (NoSuchFieldException | IllegalAccessException | ReflectionException ex) {
-            log.error("Mybatis-Plus 拦截器 拦截异常 | originalSql:{}",originalSql,ex);
+            log.error("Mybatis-Plus 拦截器 拦截异常 | originalSql:{}", originalSql, ex);
             throw new SqlStandardException("Mybatis-Plus 拦截异常");
         }
 
@@ -130,45 +124,52 @@ public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implemen
         Assert.notNull(where, ex);
         if (where instanceof EqualsTo) {
             // example: 1=1
-            EqualsTo equalsTo = (EqualsTo) where;
+            EqualsTo equalsTo = (EqualsTo)where;
             Expression leftExpression = equalsTo.getLeftExpression();
             Expression rightExpression = equalsTo.getRightExpression();
             Assert.isFalse(leftExpression.toString().equals(rightExpression.toString()), ex);
         } else if (where instanceof NotEqualsTo) {
             // example: 1 != 2
-            NotEqualsTo notEqualsTo = (NotEqualsTo) where;
+            NotEqualsTo notEqualsTo = (NotEqualsTo)where;
             Expression leftExpression = notEqualsTo.getLeftExpression();
             Expression rightExpression = notEqualsTo.getRightExpression();
             Assert.isTrue(leftExpression.toString().equals(rightExpression.toString()), ex);
         }
         //继续判断 仅有一个条件 deleted = 0 的情况，防止全表更新
         if (where instanceof EqualsTo) {
-            EqualsTo equalsTo = (EqualsTo) where;
+            EqualsTo equalsTo = (EqualsTo)where;
             Expression leftExpression = equalsTo.getLeftExpression();
             Expression rightExpression = equalsTo.getRightExpression();
-            boolean logicDelCheck = "deleted".equals(leftExpression.toString()) && "0".equals(rightExpression.toString());
-            if(logicDelCheck){
+            boolean logicDelCheck =
+                "deleted".equals(leftExpression.toString()) && "0".equals(rightExpression.toString());
+            if (logicDelCheck) {
                 throw new SqlStandardException(ex);
             }
         }
     }
+
+    @Override
     public Object plugin(Object target) {
         return Plugin.wrap(target, this);
     }
 
+    @Override
     public void setProperties(Properties properties) {
         // NOP
     }
+
     /**
      * 从指定对象反射获取私有字段
      * 请确保使用的时候有该字段
+     *
      * @param obj
      * @param filedName
      * @return
      * @throws NoSuchFieldException
      * @throws IllegalAccessException
      */
-    private Object getPrivateParam(Object obj,final String filedName) throws NoSuchFieldException, IllegalAccessException {
+    private Object getPrivateParam(Object obj, final String filedName)
+        throws NoSuchFieldException, IllegalAccessException {
         Field field = obj.getClass().getDeclaredField(filedName);
         field.setAccessible(true);
         return field.get(obj);

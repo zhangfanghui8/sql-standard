@@ -1,7 +1,8 @@
 package com.zhiyun.hospital.exception;
 
 /**
- * 异常类
+ * 全局异常类
+ *
  * @author zhangfanghui
  * @Title:
  * @Description:

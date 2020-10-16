@@ -18,6 +18,9 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Import(value = SqlStandardConfig.class)
 public @interface EnableSqlStandard {
-
+    /**
+     * 具体需要规范的路径
+     * @return
+     */
     String value() default "";
 }

@@ -239,8 +239,7 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
             throw new SqlStandardException("非法SQL，SQL使用到'count(*)'");
         }
         //select语句禁止使用*
-        if (selectItems.stream().filter(f -> (f.toString().contains("*"))).findFirst()
-            .isPresent()) {
+        if (selectItems.stream().filter(f -> (f.toString().contains("*"))).findFirst().isPresent()) {
             throw new SqlStandardException("非法SQL，SQL使用到'select *'");
         }
     }
@@ -336,7 +335,7 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         Table table = (Table)plainSelect.getFromItem();
         List<Join> joins = plainSelect.getJoins();
         List<SelectItem> selectItems = plainSelect.getSelectItems();
-        if(!CollectionUtils.isEmpty(selectItems)){
+        if (!CollectionUtils.isEmpty(selectItems)) {
             validSelectItem(selectItems);
         }
         validWhere(where, table, (Connection)obj);
@@ -370,6 +369,7 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         }
         return target;
     }
+
     /**
      * parserMulti
      * 索引对象

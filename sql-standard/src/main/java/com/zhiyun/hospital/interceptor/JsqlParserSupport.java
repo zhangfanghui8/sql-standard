@@ -32,7 +32,7 @@ public abstract class JsqlParserSupport {
             Statement statement = CCJSqlParserUtil.parse(sql);
             return processParser(statement, 0, obj);
         } catch (JSQLParserException e) {
-            throw new SqlStandardException(String.format("Failed to process, Error SQL: %s", e,sql));
+            throw new SqlStandardException(String.format("Failed to process, Error SQL: %s", e, sql));
         }
     }
 
