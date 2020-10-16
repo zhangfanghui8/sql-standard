@@ -39,21 +39,14 @@ public class InterceptorIgnoreHelper {
     /**
      * 初始化缓存 方法上 InterceptorIgnore 注解信息
      *
-     * @param mapperAnnotation Mapper Class Name
      * @param method           Method
      */
-    public static void initSqlParserInfoCache(InterceptorIgnoreCache mapperAnnotation, String mapperClassName, Method method) {
+    public static void initSqlParserInfoCache(String mapperClassName, Method method) {
         InterceptorIgnore ignore = method.getAnnotation(InterceptorIgnore.class);
         final String key = mapperClassName.concat(".").concat(method.getName());
         if (ignore != null) {
             InterceptorIgnoreCache methodCache = buildInterceptorIgnoreCache(ignore);
-            if (mapperAnnotation == null) {
-                INTERCEPTOR_IGNORE_CACHE.put(key, methodCache);
-                return;
-            }
-            INTERCEPTOR_IGNORE_CACHE.put(key, chooseCache(mapperAnnotation, methodCache));
-        } else if (mapperAnnotation != null) {
-            INTERCEPTOR_IGNORE_CACHE.put(key, mapperAnnotation);
+            INTERCEPTOR_IGNORE_CACHE.put(key, methodCache);
         }
     }
 
