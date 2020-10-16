@@ -1,11 +1,14 @@
 package com.zhiyun.hospital.interceptor;
 
-import com.baomidou.mybatisplus.core.exceptions.MybatisPlusException;
+import com.baomidou.mybatisplus.core.exceptions.SqlStandardException;
 import com.baomidou.mybatisplus.core.parser.SqlParserHelper;
 import com.baomidou.mybatisplus.core.plugins.InterceptorIgnoreHelper;
 import com.baomidou.mybatisplus.core.toolkit.*;
 import com.baomidou.mybatisplus.extension.parser.JsqlParserSupport;
 import com.baomidou.mybatisplus.extension.plugins.inner.InnerInterceptor;
+import com.zhiyun.hospital.exception.SqlStandardException;
+import com.zhiyun.hospital.util.EncryptUtils;
+import com.zhiyun.hospital.util.PluginUtils;
 import lombok.Data;
 import net.sf.jsqlparser.expression.BinaryExpression;
 import net.sf.jsqlparser.expression.Expression;
@@ -19,9 +22,18 @@ import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.select.*;
 import net.sf.jsqlparser.statement.update.Update;
 import org.apache.ibatis.executor.statement.StatementHandler;
+import org.apache.ibatis.logging.Log;
+import org.apache.ibatis.logging.LogFactory;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.mapping.SqlCommandType;
+import org.apache.ibatis.plugin.Interceptor;
+import org.apache.ibatis.plugin.Intercepts;
+import org.apache.ibatis.plugin.Invocation;
+import org.apache.ibatis.plugin.Signature;
+import org.apache.ibatis.reflection.MetaObject;
+import org.apache.ibatis.reflection.SystemMetaObject;
+import org.springframework.util.StringUtils;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -59,7 +71,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * @Description:
  * @date 2020/10/15 18:01
  */
-public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements InnerInterceptor {
+@Intercepts({@Signature(type = StatementHandler.class, method = "prepare", args = {Connection.class, Integer.class})})
+public class CustomerIllegalSQLInterceptor implements Interceptor {
+
+    private static final Log logger = LogFactory.getLog(CustomerIllegalSQLInterceptor.class);
 
     private String path = null;
     /**
@@ -77,7 +92,7 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
 
     @Override
     public void beforePrepare(StatementHandler sh, Connection connection, Integer transactionTimeout) {
-        PluginUtils.MPStatementHandler mpStatementHandler = PluginUtils.mpStatementHandler(sh);
+        PluginUtils.MPStatementHandler mpStatementHandler = z.mpStatementHandler(sh);
         MappedStatement ms = mpStatementHandler.mappedStatement();
         SqlCommandType sct = ms.getSqlCommandType();
         if (sct == SqlCommandType.INSERT || InterceptorIgnoreHelper.willIgnoreIllegalSql(ms.getId())
@@ -143,29 +158,29 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         //where条件使用了 or 关键字
         if (expression instanceof OrExpression) {
             OrExpression orExpression = (OrExpression) expression;
-            throw new MybatisPlusException("非法SQL，where条件中不能使用【or】关键字，错误or信息：" + orExpression.toString());
+            throw new SqlStandardException("非法SQL，where条件中不能使用【or】关键字，错误or信息：" + orExpression.toString());
         } else if (expression instanceof NotEqualsTo) {
             NotEqualsTo notEqualsTo = (NotEqualsTo) expression;
-            throw new MybatisPlusException("非法SQL，where条件中不能使用【!=】关键字，错误!=信息：" + notEqualsTo.toString());
+            throw new SqlStandardException("非法SQL，where条件中不能使用【!=】关键字，错误!=信息：" + notEqualsTo.toString());
         } else if (expression instanceof BinaryExpression) {
             BinaryExpression binaryExpression = (BinaryExpression) expression;
             // TODO 升级 jsqlparser 后待实现
             //            if (binaryExpression.isNot()) {
-            //                throw new MybatisPlusException("非法SQL，where条件中不能使用【not】关键字，错误not信息：" + binaryExpression.toString());
+            //                throw new SqlStandardException("非法SQL，where条件中不能使用【not】关键字，错误not信息：" + binaryExpression.toString());
             //            }
             if (binaryExpression.getLeftExpression() instanceof Function) {
                 Function function = (Function) binaryExpression.getLeftExpression();
-                throw new MybatisPlusException("非法SQL，where条件中不能使用数据库函数，错误函数信息：" + function.toString());
+                throw new SqlStandardException("非法SQL，where条件中不能使用数据库函数，错误函数信息：" + function.toString());
             }
             if (binaryExpression.getRightExpression() instanceof SubSelect) {
                 SubSelect subSelect = (SubSelect) binaryExpression.getRightExpression();
-                throw new MybatisPlusException("非法SQL，where条件中不能使用子查询，错误子查询SQL信息：" + subSelect.toString());
+                throw new SqlStandardException("非法SQL，where条件中不能使用子查询，错误子查询SQL信息：" + subSelect.toString());
             }
         } else if (expression instanceof InExpression) {
             InExpression inExpression = (InExpression) expression;
             if (inExpression.getRightItemsList() instanceof SubSelect) {
                 SubSelect subSelect = (SubSelect) inExpression.getRightItemsList();
-                throw new MybatisPlusException("非法SQL，where条件中不能使用子查询，错误子查询SQL信息：" + subSelect.toString());
+                throw new SqlStandardException("非法SQL，where条件中不能使用子查询，错误子查询SQL信息：" + subSelect.toString());
             }
         }
 
@@ -180,7 +195,7 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
      */
     private void validJoins(List<Join> joins, Table table, Connection connection) {
         if(CollectionUtils.isNotEmpty(joins) && joins.size() >= 3){
-            throw new MybatisPlusException("非法SQL，超过三个表禁止join");
+            throw new SqlStandardException("非法SQL，超过三个表禁止join");
         }
         //允许执行join，验证jion是否使用索引等等
         if (joins != null) {
@@ -222,7 +237,7 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
             }
         }
         if (!useIndexFlag) {
-            throw new MybatisPlusException("非法SQL，SQL未使用到索引, table:" + table + ", columnName:" + columnName);
+            throw new SqlStandardException("非法SQL，SQL未使用到索引, table:" + table + ", columnName:" + columnName);
         }
     }
 
@@ -286,7 +301,7 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
     private static void validSelectItem(List<SelectItem> selectItems) {
         //select语句禁止使用count(*)
         if(selectItems.stream().filter(f->(f.toString().toLowerCase().contains("count(*)"))).findFirst().isPresent()){
-            throw new MybatisPlusException("非法SQL，SQL使用到'count(*)'");
+            throw new SqlStandardException("非法SQL，SQL使用到'count(*)'");
         }
     }
     /**
@@ -341,6 +356,31 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
             }
         }
         return indexInfos;
+    }
+
+    @Override
+    public Object intercept(Invocation invocation) throws Throwable {
+        StatementHandler statementHandler = PluginUtils.realTarget(invocation.getTarget());
+        PluginUtils.MPStatementHandler mpStatementHandler = PluginUtils.mpStatementHandler(statementHandler);
+        MappedStatement ms = mpStatementHandler.mappedStatement();
+        Connection connection = (Connection) invocation.getArgs()[0];
+        // 如果是insert操作 不进行验证
+        if (SqlCommandType.INSERT.equals(ms.getSqlCommandType()) ) {
+            return invocation.proceed();
+        }
+        if(StringUtils.isEmpty(path) || ms.getId().equals(path)){
+            BoundSql boundSql = mpStatementHandler.boundSql();
+            String originalSql = boundSql.getSql();
+            logger.debug("检查SQL是否合规，SQL:" + originalSql);
+            String md5Base64 = EncryptUtils.md5Base64(originalSql);
+            if (cacheValidResult.contains(md5Base64)) {
+                logger.debug("该SQL已验证，无需再次验证，，SQL:" + originalSql);
+                return invocation.proceed();
+            }
+            parserSingle(originalSql, connection);
+            //缓存验证结果
+            cacheValidResult.add(md5Base64);
+        }
     }
 
     /**

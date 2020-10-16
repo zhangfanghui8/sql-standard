@@ -1,19 +1,20 @@
 package com.zhiyun.hospital.config;
 
-import com.baomidou.mybatisplus.core.toolkit.StringUtils;
-import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.zhiyun.hospital.EnableSqlStandard;
 import com.zhiyun.hospital.interceptor.BlockAttackInnerBoostInterceptor;
 import com.zhiyun.hospital.interceptor.CustomerIllegalSQLInterceptor;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Configurable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.annotation.AnnotationUtils;
+import org.springframework.util.StringUtils;
 
 import java.util.Map;
 
@@ -30,12 +31,8 @@ public class MybatisPlusGlobleConfig implements InitializingBean, ApplicationCon
     private ApplicationContext applicationContext;
 
     @Bean
-    @ConditionalOnMissingBean
-    public MybatisPlusInterceptor mybatisPlusInterceptor() {
-        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
-        interceptor.addInnerInterceptor(new CustomerIllegalSQLInterceptor(path));
-        interceptor.addInnerInterceptor(new BlockAttackInnerBoostInterceptor());
-        return interceptor;
+    public CustomerIllegalSQLInterceptor customerIllegalSQLInterceptor() {
+        return new CustomerIllegalSQLInterceptor(path);
     }
 
     @Override
@@ -44,7 +41,7 @@ public class MybatisPlusGlobleConfig implements InitializingBean, ApplicationCon
         for (String key : beansWithAnnotation.keySet()) {
             EnableSqlStandard annotation =
                 AnnotationUtils.findAnnotation(beansWithAnnotation.get(key).getClass(), EnableSqlStandard.class);
-            if (null != annotation && StringUtils.isNotBlank(annotation.value())) {
+            if (null != annotation && !StringUtils.isEmpty(annotation.value())) {
                 path = annotation.value();
             }
         }

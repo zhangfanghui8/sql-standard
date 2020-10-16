@@ -1,10 +1,9 @@
 package com.zhiyun.hospital.interceptor;
 
-
-import com.baomidou.mybatisplus.core.exceptions.MybatisPlusException;
 import com.baomidou.mybatisplus.core.toolkit.EncryptUtils;
 import com.baomidou.mybatisplus.core.toolkit.PluginUtils;
 import com.baomidou.mybatisplus.extension.plugins.inner.BlockAttackInnerInterceptor;
+import com.zhiyun.hospital.exception.SqlStandardException;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
@@ -55,7 +54,7 @@ public class BlockAttackInnerBoostInterceptor extends BlockAttackInnerIntercepto
             Expression rightExpression = equalsTo.getRightExpression();
             boolean logicDelCheck = "deleted".equals(leftExpression.toString()) && "0".equals(rightExpression.toString());
             if(logicDelCheck){
-                throw new MybatisPlusException(ex);
+                throw new SqlStandardException(ex);
             }
         }
     }
@@ -90,14 +89,14 @@ public class BlockAttackInnerBoostInterceptor extends BlockAttackInnerIntercepto
                         if (node instanceof TextSqlNode){
                             Object o2 = getPrivateParam(node, "text");
                             log.warn("替换参数前的SQL，$符号不建议使用 SQL:{}",o2);
-                            throw new MybatisPlusException("非法SQL，禁止使用$符");
+                            throw new SqlStandardException("非法SQL，禁止使用$符");
                         }
                     }
                 }
             }
         } catch (NoSuchFieldException | IllegalAccessException | ReflectionException ex) {
             log.error("Mybatis-Plus 拦截器 拦截异常 | originalSql:{}",originalSql,ex);
-            throw new MybatisPlusException("Mybatis-Plus 拦截异常");
+            throw new SqlStandardException("Mybatis-Plus 拦截异常");
         }
         //继续完成父类的方法
         super.beforePrepare(sh,connection,transactionTimeout);
