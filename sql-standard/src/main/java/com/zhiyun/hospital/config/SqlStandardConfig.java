@@ -1,7 +1,7 @@
 package com.zhiyun.hospital.config;
 
 import com.zhiyun.hospital.EnableSqlStandard;
-import com.zhiyun.hospital.interceptor.CustomerIllegalSQLInterceptor;
+import com.zhiyun.hospital.interceptor.BlockAttackInnerBoostInterceptor;
 import com.zhiyun.hospital.util.InterceptorIgnoreHelper;
 import org.apache.ibatis.binding.MapperRegistry;
 import org.apache.ibatis.session.Configuration;
@@ -43,9 +43,9 @@ public class SqlStandardConfig implements InitializingBean, ApplicationContextAw
             configuration = new Configuration();
            // configuration.addInterceptor(new BlockAttackInnerBoostInterceptor());
         }
-        configuration.addInterceptor(new CustomerIllegalSQLInterceptor(path));
+        configuration.addInterceptor(new BlockAttackInnerBoostInterceptor());
+//        configuration.addInterceptor(new CustomerIllegalSQLInterceptor(path));
     }
-
     @Override
     public void afterPropertiesSet() throws Exception {
         List<Method> methodList = null;

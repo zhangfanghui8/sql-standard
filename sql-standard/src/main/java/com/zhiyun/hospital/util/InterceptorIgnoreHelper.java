@@ -50,13 +50,13 @@ public class InterceptorIgnoreHelper {
         }
     }
 
-    public static boolean willIgnoreTenantLine(String id) {
-        return willIgnore(id, i -> i.getTenantLine() != null && i.getTenantLine());
-    }
-
-    public static boolean willIgnoreDynamicTableName(String id) {
-        return willIgnore(id, i -> i.getDynamicTableName() != null && i.getDynamicTableName());
-    }
+//    public static boolean willIgnoreTenantLine(String id) {
+//        return willIgnore(id, i -> i.getTenantLine() != null && i.getTenantLine());
+//    }
+//
+//    public static boolean willIgnoreDynamicTableName(String id) {
+//        return willIgnore(id, i -> i.getDynamicTableName() != null && i.getDynamicTableName());
+//    }
 
     public static boolean willIgnoreBlockAttack(String id) {
         return willIgnore(id, i -> i.getBlockAttack() != null && i.getBlockAttack());
@@ -85,6 +85,8 @@ public class InterceptorIgnoreHelper {
 
     private static InterceptorIgnoreCache buildInterceptorIgnoreCache(InterceptorIgnore ignore) {
         return InterceptorIgnoreCache.builder()
+//            .tenantLine(getBoolean(ignore.tenantLine()))
+//            .dynamicTableName(getBoolean(ignore.dynamicTableName()))
             .blockAttack(getBoolean(ignore.blockAttack()))
             .illegalSql(getBoolean(ignore.illegalSql()))
             .build();

@@ -18,7 +18,7 @@ import org.apache.ibatis.logging.LogFactory;
  * @Description:
  * @date 2020/10/16 10:54
  */
-public class JsqlParserSupport {
+public abstract class JsqlParserSupport {
     /**
      * 日志
      */
