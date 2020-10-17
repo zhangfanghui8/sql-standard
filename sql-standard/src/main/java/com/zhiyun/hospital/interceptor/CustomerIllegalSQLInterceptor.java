@@ -89,7 +89,9 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
 //            throw new SqlStandardException("非法SQL，where条件中不能使用【or】关键字，错误or信息：" + orExpression.toString());
         } else if (expression instanceof NotEqualsTo) {
             NotEqualsTo notEqualsTo = (NotEqualsTo)expression;
-            throw new SqlStandardException("非法SQL，where条件中不能使用【!=】关键字，错误!=信息：" + notEqualsTo.toString());
+            if(notEqualsTo.getStringExpression().trim().contains("!=")){
+                throw new SqlStandardException("非法SQL，where条件中不能使用【!=】关键字，错误!=信息：" + notEqualsTo.toString());
+            }
         } else if (expression instanceof BinaryExpression) {
             BinaryExpression binaryExpression = (BinaryExpression)expression;
             // TODO 升级 jsqlparser 后待实现
@@ -306,7 +308,7 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         if (SqlCommandType.INSERT.equals(ms.getSqlCommandType())) {
             return invocation.proceed();
         }
-        if (StringUtils.isEmpty(path) || ms.getId().equals(path)) {
+        if (StringUtils.isEmpty(path) || (!StringUtils.isEmpty(path) && ms.getId().contains(path))) {
             BoundSql boundSql = mpStatementHandler.boundSql();
             String originalSql = boundSql.getSql();
             logger.debug("检查SQL是否合规，SQL:" + originalSql);
