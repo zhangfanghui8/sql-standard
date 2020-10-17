@@ -75,11 +75,10 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         PluginUtils.MPStatementHandler mpStatementHandler = PluginUtils.mpStatementHandler(sh);
         MappedStatement ms = mpStatementHandler.mappedStatement();
         SqlCommandType sct = ms.getSqlCommandType();
-        if (sct == SqlCommandType.INSERT || InterceptorIgnoreHelper.willIgnoreIllegalSql(ms.getId())
-            || SqlParserHelper.getSqlParserInfo(ms)) {
+        if (sct == SqlCommandType.INSERT || InterceptorIgnoreHelper.willIgnoreIllegalSql(ms.getId())) {
             return;
         }
-        if(StringUtils.isBlank(path) || ms.getId().equals(path)){
+        if(StringUtils.isBlank(path) || (StringUtils.isNotBlank(path) && ms.getId().contains(path))){
             BoundSql boundSql = mpStatementHandler.boundSql();
             String originalSql = boundSql.getSql();
             logger.debug("检查SQL是否合规，SQL:" + originalSql);
