@@ -1,14 +1,17 @@
 package com.zhiyun.hospital.interceptor;
 
 import com.zhiyun.hospital.exception.SqlStandardException;
-import com.zhiyun.hospital.util.EncryptUtils;
+import com.zhiyun.hospital.util.Assert;
 import com.zhiyun.hospital.util.PluginUtils;
 import lombok.Data;
 import net.sf.jsqlparser.expression.BinaryExpression;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.LongValue;
 import net.sf.jsqlparser.expression.operators.conditional.OrExpression;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.expression.operators.relational.InExpression;
+import net.sf.jsqlparser.expression.operators.relational.ItemsList;
 import net.sf.jsqlparser.expression.operators.relational.NotEqualsTo;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
@@ -22,7 +25,6 @@ import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.mapping.SqlCommandType;
 import org.apache.ibatis.plugin.*;
-import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
@@ -30,7 +32,10 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -66,7 +71,7 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
     /**
      * 缓存验证结果，提高性能
      */
-    private static final Set<String> cacheValidResult = new HashSet<>();
+//    private static final Set<String> cacheValidResult = new HashSet<>();
     /**
      * 缓存表的索引信息
      */
@@ -107,7 +112,14 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
 //                throw new SqlStandardException("非法SQL，where条件中不能使用子查询，错误子查询SQL信息：" + subSelect.toString());
 //            }
         } else if (expression instanceof InExpression) {
-//            InExpression inExpression = (InExpression)expression;
+            InExpression inExpression = (InExpression)expression;
+            ItemsList rightItemsList = inExpression.getRightItemsList();
+            if (rightItemsList instanceof ExpressionList){
+                ExpressionList expressionList = (ExpressionList)rightItemsList;
+                List<Expression> expressions = expressionList.getExpressions();
+                Assert.isFalse(expressions.size() > 1000,"非法SQL，where条件中【in】关键字查询数量不可超过1000");
+            }
+
 //            if (inExpression.getRightItemsList() instanceof SubSelect) {
 //                SubSelect subSelect = (SubSelect)inExpression.getRightItemsList();
 //                throw new SqlStandardException("非法SQL，where条件中不能使用子查询，错误子查询SQL信息：" + subSelect.toString());
@@ -242,6 +254,17 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
     }
 
     /**
+     * 验证limit条件
+     * @param limit
+     */
+    private void validLimit(Limit limit) {
+        if (limit != null){
+            LongValue offset = (LongValue)limit.getOffset();
+            long offsetValue = offset.getValue();
+            Assert.isFalse(offsetValue > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
+        }
+    }
+    /**
      * 得到表的索引信息
      *
      * @param dbName    ignore
@@ -312,14 +335,14 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
             BoundSql boundSql = mpStatementHandler.boundSql();
             String originalSql = boundSql.getSql();
             logger.debug("检查SQL是否合规，SQL:" + originalSql);
-            String md5Base64 = EncryptUtils.md5Base64(originalSql);
-            if (cacheValidResult.contains(md5Base64)) {
-                logger.debug("该SQL已验证，无需再次验证，，SQL:" + originalSql);
-                return invocation.proceed();
-            }
+//            String md5Base64 = EncryptUtils.md5Base64(originalSql);
+//            if (cacheValidResult.contains(md5Base64)) {
+//                logger.debug("该SQL已验证，无需再次验证，，SQL:" + originalSql);
+//                return invocation.proceed();
+//            }
             parserSingle(originalSql, connection);
             //缓存验证结果
-            cacheValidResult.add(md5Base64);
+//            cacheValidResult.add(md5Base64);
         }
         return invocation.proceed();
     }
@@ -335,8 +358,10 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         if (!CollectionUtils.isEmpty(selectItems)) {
             validSelectItem(selectItems);
         }
+        Limit limit = plainSelect.getLimit();
         validWhere(where, table, (Connection)obj);
         validJoins(joins, table, (Connection)obj);
+        validLimit(limit);
     }
 
     @Override
