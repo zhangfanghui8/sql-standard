@@ -1,7 +1,6 @@
 package com.zhiyun.hospital.interceptor;
 
 import com.baomidou.mybatisplus.core.exceptions.MybatisPlusException;
-import com.baomidou.mybatisplus.core.parser.SqlParserHelper;
 import com.baomidou.mybatisplus.core.plugins.InterceptorIgnoreHelper;
 import com.baomidou.mybatisplus.core.toolkit.*;
 import com.baomidou.mybatisplus.extension.parser.JsqlParserSupport;
@@ -10,8 +9,11 @@ import lombok.Data;
 import net.sf.jsqlparser.expression.BinaryExpression;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.LongValue;
 import net.sf.jsqlparser.expression.operators.conditional.OrExpression;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.expression.operators.relational.InExpression;
+import net.sf.jsqlparser.expression.operators.relational.ItemsList;
 import net.sf.jsqlparser.expression.operators.relational.NotEqualsTo;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
@@ -105,8 +107,10 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         if (CollectionUtils.isNotEmpty(selectItem)) {
             validSelectItem(selectItem);
         }
+        Limit limit = plainSelect.getLimit();
         validWhere(where, table, (Connection)obj);
         validJoins(joins, table, (Connection)obj);
+        validLimit(limit);
     }
 
     @Override
@@ -161,10 +165,17 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
             }
         } else if (expression instanceof InExpression) {
             InExpression inExpression = (InExpression)expression;
-            if (inExpression.getRightItemsList() instanceof SubSelect) {
-                SubSelect subSelect = (SubSelect)inExpression.getRightItemsList();
-                throw new MybatisPlusException("非法SQL，where条件中不能使用子查询，错误子查询SQL信息：" + subSelect.toString());
+            ItemsList rightItemsList = inExpression.getRightItemsList();
+            if (rightItemsList instanceof ExpressionList){
+                ExpressionList expressionList = (ExpressionList)rightItemsList;
+                List<Expression> expressions = expressionList.getExpressions();
+                Assert.isFalse(expressions.size() > 1000,"非法SQL，where条件中【in】关键字查询数量不可超过1000");
             }
+
+//            if (inExpression.getRightItemsList() instanceof SubSelect) {
+//                SubSelect subSelect = (SubSelect)inExpression.getRightItemsList();
+//                throw new SqlStandardException("非法SQL，where条件中不能使用子查询，错误子查询SQL信息：" + subSelect.toString());
+//            }
         }
 
     }
@@ -190,6 +201,17 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         }
     }
 
+    /**
+     * 验证limit条件
+     * @param limit
+     */
+    private void validLimit(Limit limit) {
+        if (limit != null){
+            LongValue offset = (LongValue)limit.getOffset();
+            long offsetValue = offset.getValue();
+            Assert.isFalse(offsetValue > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
+        }
+    }
     /**
      * 检查是否使用索引
      *
