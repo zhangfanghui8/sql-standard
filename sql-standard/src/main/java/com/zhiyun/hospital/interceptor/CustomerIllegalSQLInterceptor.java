@@ -212,18 +212,18 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
             //如果左边表达式为Column对象，则直接获得列名
             if (leftExpression instanceof Column) {
                 Expression rightExpression = ((BinaryExpression)expression).getRightExpression();
-                if (joinTable != null && rightExpression instanceof Column) {
-                    if (Objects.equals(((Column)rightExpression).getTable().getName(), table.getAlias().getName())) {
-                        validUseIndex(table, ((Column)rightExpression).getColumnName(), connection);
-                        validUseIndex(joinTable, ((Column)leftExpression).getColumnName(), connection);
-                    } else {
-                        validUseIndex(joinTable, ((Column)rightExpression).getColumnName(), connection);
-                        validUseIndex(table, ((Column)leftExpression).getColumnName(), connection);
-                    }
-                } else {
-                    //获得列名
-                    validUseIndex(table, ((Column)leftExpression).getColumnName(), connection);
-                }
+//                if (joinTable != null && rightExpression instanceof Column) {
+//                    if (Objects.equals(((Column)rightExpression).getTable().getName(), table.getAlias().getName())) {
+//                        validUseIndex(table, ((Column)rightExpression).getColumnName(), connection);
+//                        validUseIndex(joinTable, ((Column)leftExpression).getColumnName(), connection);
+//                    } else {
+//                        validUseIndex(joinTable, ((Column)rightExpression).getColumnName(), connection);
+//                        validUseIndex(table, ((Column)leftExpression).getColumnName(), connection);
+//                    }
+//                } else {
+//                    //获得列名
+//                    validUseIndex(table, ((Column)leftExpression).getColumnName(), connection);
+//                }
             }
             //如果BinaryExpression，进行迭代
             else if (leftExpression instanceof BinaryExpression) {
