@@ -2,6 +2,7 @@ package com.zhiyun.hospital.interceptor;
 
 
 import com.baomidou.mybatisplus.core.exceptions.MybatisPlusException;
+import com.baomidou.mybatisplus.core.plugins.InterceptorIgnoreHelper;
 import com.baomidou.mybatisplus.core.toolkit.EncryptUtils;
 import com.baomidou.mybatisplus.core.toolkit.PluginUtils;
 import com.baomidou.mybatisplus.extension.plugins.inner.BlockAttackInnerInterceptor;
@@ -11,6 +12,7 @@ import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
 import org.apache.ibatis.executor.statement.StatementHandler;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.mapping.SqlCommandType;
 import org.apache.ibatis.mapping.SqlSource;
 import org.apache.ibatis.reflection.MetaObject;
 import org.apache.ibatis.reflection.ReflectionException;
@@ -68,10 +70,8 @@ public class BlockAttackInnerBoostInterceptor extends BlockAttackInnerIntercepto
      */
     @Override
     public void beforePrepare(StatementHandler sh, Connection connection, Integer transactionTimeout) {
-        //父类方法先执行，保证@InterceptorIgnore有效
-        super.beforePrepare(sh,connection,transactionTimeout);
-
         PluginUtils.MPStatementHandler handler = PluginUtils.mpStatementHandler(sh);
+        MappedStatement ms = handler.mappedStatement();
         BoundSql boundSql = handler.boundSql();
         String originalSql = boundSql.getSql();
         String md5Base64 = EncryptUtils.md5Base64(originalSql);
@@ -79,9 +79,17 @@ public class BlockAttackInnerBoostInterceptor extends BlockAttackInnerIntercepto
             logger.debug("该SQL已验证，无需再次验证，，SQL:" + originalSql);
             return;
         }
+        //保证@InterceptorIgnore有效
+        if (InterceptorIgnoreHelper.willIgnoreBlockAttack(ms.getId())) {
+            cacheValidResult.add(md5Base64);
+            return;
+        }
+        SqlCommandType sct = ms.getSqlCommandType();
+        if (sct == SqlCommandType.UPDATE || sct == SqlCommandType.DELETE) {
+            parserMulti(boundSql.getSql(), null);
+        }
         //拦截使用$的sql
         try {
-            MappedStatement ms = handler.mappedStatement();
             SqlSource sqlSource = ms.getSqlSource();
             if (sqlSource instanceof DynamicSqlSource){
                 MetaObject metaObject = SystemMetaObject.forObject(sqlSource);
