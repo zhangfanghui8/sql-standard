@@ -93,10 +93,12 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
                 logger.debug("该SQL已验证，无需再次验证，，SQL:" + originalSql);
                 return;
             }
-            validLimit(boundSql,connection);
             parserSingle(originalSql, connection);
+            boolean doCache = validLimit(boundSql, connection);
             //缓存验证结果
-            cacheValidResult.add(md5Base64);
+            if (doCache){
+               cacheValidResult.add(md5Base64);
+            }
         }
     }
 
@@ -145,8 +147,8 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         //where条件使用了 or 关键字
 
         if (expression instanceof OrExpression) {
-            OrExpression orExpression = (OrExpression)expression;
-            throw new MybatisPlusException("非法SQL，where条件中不能使用【or】关键字，错误or信息：" + orExpression.toString());
+//            OrExpression orExpression = (OrExpression)expression;
+//            throw new MybatisPlusException("非法SQL，where条件中不能使用【or】关键字，错误or信息：" + orExpression.toString());
         } else if (expression instanceof NotEqualsTo) {
             NotEqualsTo notEqualsTo = (NotEqualsTo)expression;
             if(notEqualsTo.getStringExpression().trim().contains("!=")){
@@ -204,16 +206,16 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         }
     }
 
+
     /**
-     * 验证limit条件
-     * @param limit
-     */
-    /**
-     * 验证limit条件
+     * 验证limit条件，如果是动态的参数则不进行缓存
      * @param boundSql
      * @param connection
+     * @return true 缓存 false 不进行缓存
      */
-    private void validLimit(BoundSql boundSql, Connection connection) {
+    private boolean validLimit(BoundSql boundSql, Connection connection) {
+        //默认缓存
+        boolean isCache = true;
         Statement statement = null;
         String sql = boundSql.getSql();
         try {
@@ -251,16 +253,19 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
                                 Assert.isFalse(longValue.intValue() > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
                             }
                         }
-                    }catch (Exception ex){
-                        //暂不抛出该异常
+                    }catch (MybatisPlusException myEx){
+                        //除了sql校验异常，捕获后继续抛出
+                        throw myEx;
+                    } catch (Exception ex){
+                        //暂不抛出其他异常
                         logger.error("含有limit解析异常 SQL："+sql,ex);
                     }
-
                 }
-
+                //有动态参数判断则不缓存
+                isCache = false;
             }
         }
-
+        return isCache;
     }
     /**
      * 检查是否使用索引
