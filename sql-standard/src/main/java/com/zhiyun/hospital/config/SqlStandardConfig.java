@@ -20,6 +20,8 @@ import org.springframework.util.StringUtils;
 
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * @author zhangfanghui
@@ -30,7 +32,7 @@ import java.util.*;
 @Configurable
 @ConditionalOnClass({SqlSessionFactory.class})
 public class SqlStandardConfig implements InitializingBean, ApplicationContextAware {
-    private String path = null;
+    private List<String> paths = null;
     private ApplicationContext applicationContext;
     @Autowired
     SqlSessionFactory sqlSessionFactory;
@@ -44,7 +46,7 @@ public class SqlStandardConfig implements InitializingBean, ApplicationContextAw
             configuration = new Configuration();
         }
         configuration.addInterceptor(new BlockAttackInnerBoostInterceptor());
-        configuration.addInterceptor(new CustomerIllegalSQLInterceptor(path));
+        configuration.addInterceptor(new CustomerIllegalSQLInterceptor(paths));
     }
 
     @Override
@@ -55,7 +57,7 @@ public class SqlStandardConfig implements InitializingBean, ApplicationContextAw
             EnableSqlStandard annotation =
                 AnnotationUtils.findAnnotation(beansWithAnnotation.get(key).getClass(), EnableSqlStandard.class);
             if (null != annotation && !StringUtils.isEmpty(annotation.value())) {
-                path = annotation.value();
+                paths = Stream.of(annotation.value()).collect(Collectors.toList());
             }
         }
         addInterceptor();

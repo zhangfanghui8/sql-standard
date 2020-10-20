@@ -2,29 +2,31 @@ package com.zhiyun.hospital.interceptor;
 
 import com.zhiyun.hospital.exception.SqlStandardException;
 import com.zhiyun.hospital.util.Assert;
+import com.zhiyun.hospital.util.EncryptUtils;
 import com.zhiyun.hospital.util.PluginUtils;
 import lombok.Data;
-import net.sf.jsqlparser.expression.BinaryExpression;
-import net.sf.jsqlparser.expression.Expression;
-import net.sf.jsqlparser.expression.Function;
-import net.sf.jsqlparser.expression.LongValue;
+import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.expression.*;
 import net.sf.jsqlparser.expression.operators.conditional.OrExpression;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.expression.operators.relational.InExpression;
 import net.sf.jsqlparser.expression.operators.relational.ItemsList;
 import net.sf.jsqlparser.expression.operators.relational.NotEqualsTo;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.select.*;
 import net.sf.jsqlparser.statement.update.Update;
 import org.apache.ibatis.executor.statement.StatementHandler;
-import org.apache.ibatis.logging.Log;
-import org.apache.ibatis.logging.LogFactory;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.mapping.ParameterMapping;
 import org.apache.ibatis.mapping.SqlCommandType;
 import org.apache.ibatis.plugin.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
@@ -32,11 +34,9 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 
 /**
  * 由于开发人员水平参差不齐，即使订了开发规范很多人也不遵守
@@ -65,21 +65,21 @@ import java.util.concurrent.ConcurrentHashMap;
 @Intercepts({@Signature(type = StatementHandler.class, method = "prepare", args = {Connection.class, Integer.class})})
 public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements Interceptor {
 
-    private static final Log logger = LogFactory.getLog(CustomerIllegalSQLInterceptor.class);
+    private static final Logger logger = LoggerFactory.getLogger(CustomerIllegalSQLInterceptor.class);
 
-    private String path = null;
+    private List<String> paths = null;
     /**
      * 缓存验证结果，提高性能
      */
-//    private static final Set<String> cacheValidResult = new HashSet<>();
+    private static final Set<String> cacheValidResult = new HashSet<>();
     /**
      * 缓存表的索引信息
      */
     private static final Map<String, List<CustomerIllegalSQLInterceptor.IndexInfo>> indexInfoMap =
         new ConcurrentHashMap<>();
 
-    public CustomerIllegalSQLInterceptor(String path) {
-        this.path = path;
+    public CustomerIllegalSQLInterceptor(List<String> paths) {
+        this.paths = paths;
     }
 
     /**
@@ -254,17 +254,6 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
     }
 
     /**
-     * 验证limit条件
-     * @param limit
-     */
-    private void validLimit(Limit limit) {
-        if (limit != null){
-            LongValue offset = (LongValue)limit.getOffset();
-            long offsetValue = offset.getValue();
-            Assert.isFalse(offsetValue > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
-        }
-    }
-    /**
      * 得到表的索引信息
      *
      * @param dbName    ignore
@@ -331,20 +320,77 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         if (SqlCommandType.INSERT.equals(ms.getSqlCommandType())) {
             return invocation.proceed();
         }
-        if (StringUtils.isEmpty(path) || (!StringUtils.isEmpty(path) && ms.getId().contains(path))) {
+        if (CollectionUtils.isEmpty(paths) || (!CollectionUtils.isEmpty(paths) &&
+                paths.stream().anyMatch(path -> ms.getId().contains(path)))) {
             BoundSql boundSql = mpStatementHandler.boundSql();
             String originalSql = boundSql.getSql();
             logger.debug("检查SQL是否合规，SQL:" + originalSql);
-//            String md5Base64 = EncryptUtils.md5Base64(originalSql);
-//            if (cacheValidResult.contains(md5Base64)) {
-//                logger.debug("该SQL已验证，无需再次验证，，SQL:" + originalSql);
-//                return invocation.proceed();
-//            }
+            String md5Base64 = EncryptUtils.md5Base64(originalSql);
+            if (cacheValidResult.contains(md5Base64)) {
+                logger.debug("该SQL已验证，无需再次验证，，SQL:" + originalSql);
+                return invocation.proceed();
+            }
+            validLimit(boundSql,connection);
             parserSingle(originalSql, connection);
             //缓存验证结果
-//            cacheValidResult.add(md5Base64);
+            cacheValidResult.add(md5Base64);
         }
         return invocation.proceed();
+    }
+
+    /**
+     * 验证limit条件
+     * @param boundSql
+     * @param connection
+     */
+    private void validLimit(BoundSql boundSql, Connection connection) {
+        Statement statement = null;
+        String sql = boundSql.getSql();
+        try {
+            statement = CCJSqlParserUtil.parse(sql);
+        } catch (JSQLParserException e) {
+            logger.error("解析SQL出错， sql: "+sql,e);
+        }
+        if (statement instanceof Select) {
+            Select select = (Select)statement;
+            PlainSelect plainSelect = (PlainSelect)select.getSelectBody();
+            Limit limit = plainSelect.getLimit();
+            if (limit != null ){
+                Expression offset = limit.getOffset();
+                if (offset instanceof LongValue){
+                    LongValue offsetLong = (LongValue)offset;
+                    long offsetValue = offsetLong.getValue();
+                    Assert.isFalse(offsetValue > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
+                }else if (offset instanceof JdbcParameter){
+                    try{
+                        List<ParameterMapping> parameterMappings = boundSql.getParameterMappings();
+                        Map paramMap = (Map)boundSql.getParameterObject();
+                        int total = parameterMappings.size();
+                        String[] limits = sql.split(" limit ");
+                        if (limits.length > 0){
+                            int question = (int)Stream.of(limits[1].split("")).filter("?"::equals).count();
+                            int index = total - question;
+                            ParameterMapping parameterMapping = parameterMappings.get(index);
+                            String property = parameterMapping.getProperty();
+                            Object value = paramMap.get(property);
+                            if (value instanceof Integer){
+                                Integer intValue = (Integer)value;
+                                Assert.isFalse(intValue > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
+                            }else if (value instanceof Long){
+                                Long longValue = (Long)value;
+                                Assert.isFalse(longValue.intValue() > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
+                            }
+                        }
+                    }catch (Exception ex){
+                        //暂不抛出该异常
+                        logger.warn("含有limit解析异常 SQL："+sql,ex);
+                    }
+
+                }
+
+            }
+        }
+
     }
 
     @Override
@@ -358,10 +404,8 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         if (!CollectionUtils.isEmpty(selectItems)) {
             validSelectItem(selectItems);
         }
-        Limit limit = plainSelect.getLimit();
         validWhere(where, table, (Connection)obj);
         validJoins(joins, table, (Connection)obj);
-        validLimit(limit);
     }
 
     @Override
