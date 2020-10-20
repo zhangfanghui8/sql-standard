@@ -72,14 +72,15 @@ public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implemen
             log.debug("该SQL已验证，无需再次验证，，SQL:" + originalSql);
             return invocation.proceed();
         }
+        //使用@InterceptorIgnore且配置 blockAttack = true，忽略校验
+        if (InterceptorIgnoreHelper.willIgnoreBlockAttack(ms.getId())) {
+            //缓存验证结果
+            cacheValidResult.add(md5Base64);
+            return invocation.proceed();
+        }
         SqlCommandType sct = ms.getSqlCommandType();
+        //在写入和删除的时候进行校验
         if (sct == SqlCommandType.UPDATE || sct == SqlCommandType.DELETE) {
-            if (InterceptorIgnoreHelper.willIgnoreBlockAttack(ms.getId())) {
-                //缓存验证结果
-                cacheValidResult.add(md5Base64);
-                return invocation.proceed();
-            }
-            //sql校验
             parserMulti(boundSql.getSql(), null);
         }
 
