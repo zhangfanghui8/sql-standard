@@ -6,17 +6,14 @@ import com.zhiyun.hospital.util.EncryptUtils;
 import com.zhiyun.hospital.util.InterceptorIgnoreHelper;
 import com.zhiyun.hospital.util.PluginUtils;
 import lombok.Data;
-import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.*;
 import net.sf.jsqlparser.expression.operators.conditional.OrExpression;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.expression.operators.relational.InExpression;
 import net.sf.jsqlparser.expression.operators.relational.ItemsList;
 import net.sf.jsqlparser.expression.operators.relational.NotEqualsTo;
-import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
-import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.select.*;
 import net.sf.jsqlparser.statement.update.Update;
@@ -345,58 +342,50 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
     /**
      * 验证limit条件，如果是动态的参数则不进行缓存
      * @param boundSql
+     * @param select
      * @return true 缓存 false 不进行缓存
      */
-    private boolean validLimit(BoundSql boundSql) {
+    private boolean validLimit(BoundSql boundSql, Select select) {
         //默认缓存
         boolean isCache = true;
-        Statement statement = null;
         String sql = boundSql.getSql();
-        try {
-            statement = CCJSqlParserUtil.parse(sql);
-        } catch (JSQLParserException e) {
-            logger.error("解析SQL出错， sql: "+sql,e);
-        }
-        if (statement instanceof Select) {
-            Select select = (Select)statement;
-            PlainSelect plainSelect = (PlainSelect)select.getSelectBody();
-            Limit limit = plainSelect.getLimit();
-            if (limit != null ){
-                Expression offset = limit.getOffset();
-                if (offset instanceof LongValue){
-                    LongValue offsetLong = (LongValue)offset;
-                    long offsetValue = offsetLong.getValue();
-                    Assert.isFalse(offsetValue > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
-                }else if (offset instanceof JdbcParameter){
-                    try{
-                        List<ParameterMapping> parameterMappings = boundSql.getParameterMappings();
-                        Map paramMap = (Map)boundSql.getParameterObject();
-                        int total = parameterMappings.size();
-                        String[] limits = sql.split(" limit ");
-                        if (limits.length > 0){
-                            int question = (int)Stream.of(limits[1].split("")).filter("?"::equals).count();
-                            int index = total - question;
-                            ParameterMapping parameterMapping = parameterMappings.get(index);
-                            String property = parameterMapping.getProperty();
-                            Object value = paramMap.get(property);
-                            if (value instanceof Integer){
-                                Integer intValue = (Integer)value;
-                                Assert.isFalse(intValue > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
-                            }else if (value instanceof Long){
-                                Long longValue = (Long)value;
-                                Assert.isFalse(longValue.intValue() > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
-                            }
+        PlainSelect plainSelect = (PlainSelect)select.getSelectBody();
+        Limit limit = plainSelect.getLimit();
+        if (limit != null){
+            Expression offset = limit.getOffset();
+            if (offset instanceof LongValue){
+                LongValue offsetLong = (LongValue)offset;
+                long offsetValue = offsetLong.getValue();
+                Assert.isFalse(offsetValue > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
+            }else if (offset instanceof JdbcParameter){
+                try{
+                    List<ParameterMapping> parameterMappings = boundSql.getParameterMappings();
+                    Map paramMap = (Map)boundSql.getParameterObject();
+                    int total = parameterMappings.size();
+                    String[] limits = sql.split(" limit ");
+                    if (limits.length > 0){
+                        int question = (int)Stream.of(limits[1].split("")).filter("?"::equals).count();
+                        int index = total - question;
+                        ParameterMapping parameterMapping = parameterMappings.get(index);
+                        String property = parameterMapping.getProperty();
+                        Object value = paramMap.get(property);
+                        if (value instanceof Integer){
+                            Integer intValue = (Integer)value;
+                            Assert.isFalse(intValue > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
+                        }else if (value instanceof Long){
+                            Long longValue = (Long)value;
+                            Assert.isFalse(longValue.intValue() > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
                         }
-                    }catch (SqlStandardException sqlStandardException){
-                        //除了sql校验异常，捕获后继续抛出
-                        throw sqlStandardException;
-                    } catch (Exception ex){
-                        //暂不抛出其他异常
-                        logger.warn("含有limit解析异常 SQL："+sql,ex);
                     }
-                    //有动态参数判断则不缓存
-                    isCache = false;
+                }catch (SqlStandardException sqlStandardException){
+                    //除了sql校验异常，捕获后继续抛出
+                    throw sqlStandardException;
+                } catch (Exception ex){
+                    //暂不抛出其他异常
+                    logger.warn("含有limit解析异常 SQL："+sql,ex);
                 }
+                //有动态参数判断则不缓存
+                isCache = false;
             }
         }
         return isCache;
@@ -415,7 +404,7 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         }
         validWhere(where, table, (Connection)obj);
         validJoins(joins, table, (Connection)obj);
-        boolean isCache = validLimit(boundSql);
+        boolean isCache = validLimit(boundSql, select);
         return isCache;
     }
 
