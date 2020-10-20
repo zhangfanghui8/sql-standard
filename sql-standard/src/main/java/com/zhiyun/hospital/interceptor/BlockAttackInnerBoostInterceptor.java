@@ -3,12 +3,17 @@ package com.zhiyun.hospital.interceptor;
 
 import com.baomidou.mybatisplus.core.exceptions.MybatisPlusException;
 import com.baomidou.mybatisplus.core.plugins.InterceptorIgnoreHelper;
+import com.baomidou.mybatisplus.core.toolkit.Assert;
 import com.baomidou.mybatisplus.core.toolkit.EncryptUtils;
 import com.baomidou.mybatisplus.core.toolkit.PluginUtils;
-import com.baomidou.mybatisplus.extension.plugins.inner.BlockAttackInnerInterceptor;
+import com.baomidou.mybatisplus.extension.parser.JsqlParserSupport;
+import com.baomidou.mybatisplus.extension.plugins.inner.InnerInterceptor;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
+import net.sf.jsqlparser.expression.operators.relational.NotEqualsTo;
+import net.sf.jsqlparser.statement.delete.Delete;
+import net.sf.jsqlparser.statement.update.Update;
 import org.apache.ibatis.executor.statement.StatementHandler;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
@@ -40,27 +45,11 @@ import java.util.Set;
  * @since mybatis-plus 3.4.0
  */
 @Slf4j
-public class BlockAttackInnerBoostInterceptor extends BlockAttackInnerInterceptor {
+public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implements InnerInterceptor {
     /**
      * 缓存验证结果，提高性能
      */
     private static final Set<String> cacheValidResult = new HashSet<>(64);
-
-    @Override
-    protected void checkWhere(Expression where, String ex) {
-        //原来的基础判断继续
-        super.checkWhere(where,ex);
-        //继续判断 仅有一个条件 deleted = 0 的情况，防止全表更新
-        if (where instanceof EqualsTo) {
-            EqualsTo equalsTo = (EqualsTo) where;
-            Expression leftExpression = equalsTo.getLeftExpression();
-            Expression rightExpression = equalsTo.getRightExpression();
-            boolean logicDelCheck = "deleted".equals(leftExpression.toString()) && "0".equals(rightExpression.toString());
-            if(logicDelCheck){
-                throw new MybatisPlusException(ex);
-            }
-        }
-    }
 
     /**
      * 操作前的判断
@@ -113,7 +102,42 @@ public class BlockAttackInnerBoostInterceptor extends BlockAttackInnerIntercepto
         //缓存验证结果
         cacheValidResult.add(md5Base64);
     }
+    @Override
+    protected void processDelete(Delete delete, int index, Object obj) {
+        this.checkWhere(delete.getWhere(), "Prohibition of full table deletion");
+    }
 
+    @Override
+    protected void processUpdate(Update update, int index, Object obj) {
+        this.checkWhere(update.getWhere(), "Prohibition of table update operation");
+    }
+    protected void checkWhere(Expression where, String ex) {
+        //原来的基础判断继续
+        Assert.notNull(where, "非法SQL，必须要有where条件");
+        if (where instanceof EqualsTo) {
+            // example: 1=1
+            EqualsTo equalsTo = (EqualsTo)where;
+            Expression leftExpression = equalsTo.getLeftExpression();
+            Expression rightExpression = equalsTo.getRightExpression();
+            Assert.isFalse(leftExpression.toString()
+                    .equals(rightExpression.toString()), "非法SQL，where条件中存在【1=1】条件");
+        } else if (where instanceof NotEqualsTo) {
+            // example: 1 != 2
+            NotEqualsTo notEqualsTo = (NotEqualsTo)where;
+            Expression leftExpression = notEqualsTo.getLeftExpression();
+            Expression rightExpression = notEqualsTo.getRightExpression();
+            Assert.isTrue(leftExpression.toString()
+                    .equals(rightExpression.toString()), "非法SQL，where条件中存在【1!=2】条件");
+        }
+        //继续判断 仅有一个条件 deleted = 0 的情况，防止全表更新
+        if (where instanceof EqualsTo) {
+            EqualsTo equalsTo = (EqualsTo) where;
+            Expression leftExpression = equalsTo.getLeftExpression();
+            Expression rightExpression = equalsTo.getRightExpression();
+            boolean logicDelCheck = "deleted".equals(leftExpression.toString()) && "0".equals(rightExpression.toString());
+            Assert.isFalse(logicDelCheck, "非法SQL，where条件中仅存在【deleted=0】条件");
+        }
+    }
     /**
      * 从指定对象反射获取私有字段
      * 请确保使用的时候有该字段
