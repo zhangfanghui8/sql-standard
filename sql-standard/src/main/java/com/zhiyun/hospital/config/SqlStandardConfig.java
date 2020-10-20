@@ -3,6 +3,7 @@ package com.zhiyun.hospital.config;
 import com.zhiyun.hospital.EnableSqlStandard;
 import com.zhiyun.hospital.interceptor.BlockAttackInnerBoostInterceptor;
 import com.zhiyun.hospital.interceptor.CustomerIllegalSQLInterceptor;
+import com.zhiyun.hospital.util.ArrayUtils;
 import com.zhiyun.hospital.util.InterceptorIgnoreHelper;
 import org.apache.ibatis.binding.MapperRegistry;
 import org.apache.ibatis.session.Configuration;
@@ -16,7 +17,6 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.util.CollectionUtils;
-import org.springframework.util.StringUtils;
 
 import java.lang.reflect.Method;
 import java.util.*;
@@ -56,7 +56,7 @@ public class SqlStandardConfig implements InitializingBean, ApplicationContextAw
         for (String key : beansWithAnnotation.keySet()) {
             EnableSqlStandard annotation =
                 AnnotationUtils.findAnnotation(beansWithAnnotation.get(key).getClass(), EnableSqlStandard.class);
-            if (null != annotation && !StringUtils.isEmpty(annotation.value())) {
+            if (null != annotation && ArrayUtils.isNotEmpty(annotation.value())) {
                 paths = Stream.of(annotation.value()).collect(Collectors.toList());
             }
         }
