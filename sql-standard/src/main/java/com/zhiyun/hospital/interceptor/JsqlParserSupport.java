@@ -11,6 +11,7 @@ import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.update.Update;
 import org.apache.ibatis.logging.Log;
 import org.apache.ibatis.logging.LogFactory;
+import org.apache.ibatis.mapping.BoundSql;
 
 /**
  * @author zhangfanghui
@@ -31,6 +32,25 @@ public abstract class JsqlParserSupport {
         try {
             Statement statement = CCJSqlParserUtil.parse(sql);
             return processParser(statement, 0, obj);
+        } catch (JSQLParserException e) {
+            throw new SqlStandardException(String.format("Failed to process, Error SQL: %s", e, sql));
+        }
+    }
+
+    /**
+     * 解析单个sql
+     * @param boundSql
+     * @param obj
+     * @return isCache 是否进行缓存
+     */
+    public boolean parserSingle(BoundSql boundSql, Object obj) {
+        String sql = boundSql.getSql();
+        if (logger.isDebugEnabled()) {
+            logger.debug("Original SQL: " + sql);
+        }
+        try {
+            Statement statement = CCJSqlParserUtil.parse(sql);
+            return processParser(boundSql,statement, 0, obj);
         } catch (JSQLParserException e) {
             throw new SqlStandardException(String.format("Failed to process, Error SQL: %s", e, sql));
         }
@@ -82,6 +102,30 @@ public abstract class JsqlParserSupport {
     }
 
     /**
+     * 执行 SQL 解析
+     *
+     * @param statement JsqlParser Statement
+     * @return isCache 是否缓存
+     */
+    protected boolean processParser(BoundSql boundSql, Statement statement, int index, Object obj) {
+        boolean isCache = true;
+        if (statement instanceof Insert) {
+            this.processInsert((Insert)statement, index, obj);
+        } else if (statement instanceof Select) {
+            isCache = this.processSelect(boundSql, (Select)statement, index, obj);
+        } else if (statement instanceof Update) {
+            this.processUpdate((Update)statement, index, obj);
+        } else if (statement instanceof Delete) {
+            this.processDelete((Delete)statement, index, obj);
+        }
+        final String sql = statement.toString();
+        if (logger.isDebugEnabled()) {
+            logger.debug("parser sql: " + sql);
+        }
+        return isCache;
+    }
+
+    /**
      * 新增
      */
     protected void processInsert(Insert insert, int index, Object obj) {
@@ -106,6 +150,12 @@ public abstract class JsqlParserSupport {
      * 查询
      */
     protected void processSelect(Select select, int index, Object obj) {
+        throw new UnsupportedOperationException();
+    }
+    /**
+     * 查询
+     */
+    protected boolean processSelect(BoundSql boundSql, Select select, int index, Object obj) {
         throw new UnsupportedOperationException();
     }
 }

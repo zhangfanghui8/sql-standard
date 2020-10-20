@@ -332,10 +332,9 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
                 logger.debug("该SQL已验证，无需再次验证，，SQL:" + originalSql);
                 return invocation.proceed();
             }
-            parserSingle(originalSql, connection);
-            boolean doCache = validLimit(boundSql, connection);
+            boolean isCache = parserSingle(boundSql, connection);
             //缓存验证结果
-            if (doCache){
+            if (isCache){
                 cacheValidResult.add(md5Base64);
             }
         }
@@ -346,10 +345,9 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
     /**
      * 验证limit条件，如果是动态的参数则不进行缓存
      * @param boundSql
-     * @param connection
      * @return true 缓存 false 不进行缓存
      */
-    private boolean validLimit(BoundSql boundSql, Connection connection) {
+    private boolean validLimit(BoundSql boundSql) {
         //默认缓存
         boolean isCache = true;
         Statement statement = null;
@@ -405,7 +403,7 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
     }
 
     @Override
-    protected void processSelect(Select select, int index, Object obj) {
+    protected boolean processSelect(BoundSql boundSql, Select select, int index, Object obj) {
         PlainSelect plainSelect = (PlainSelect)select.getSelectBody();
         Expression where = plainSelect.getWhere();
         Assert.notNull(where, "非法SQL，必须要有where条件");
@@ -417,6 +415,8 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         }
         validWhere(where, table, (Connection)obj);
         validJoins(joins, table, (Connection)obj);
+        boolean isCache = validLimit(boundSql);
+        return isCache;
     }
 
     @Override
