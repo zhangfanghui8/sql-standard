@@ -396,9 +396,9 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
                         //暂不抛出其他异常
                         logger.warn("含有limit解析异常 SQL："+sql,ex);
                     }
+                    //有动态参数判断则不缓存
+                    isCache = false;
                 }
-                //有动态参数判断则不缓存
-                isCache = false;
             }
         }
         return isCache;
