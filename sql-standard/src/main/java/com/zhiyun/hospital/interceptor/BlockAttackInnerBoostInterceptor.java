@@ -75,11 +75,12 @@ public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implemen
         SqlCommandType sct = ms.getSqlCommandType();
         if (sct == SqlCommandType.UPDATE || sct == SqlCommandType.DELETE) {
             if (InterceptorIgnoreHelper.willIgnoreBlockAttack(ms.getId())) {
-                parserMulti(boundSql.getSql(), null);
                 //缓存验证结果
                 cacheValidResult.add(md5Base64);
                 return invocation.proceed();
             }
+            //sql校验
+            parserMulti(boundSql.getSql(), null);
         }
 
         //拦截使用$的sql

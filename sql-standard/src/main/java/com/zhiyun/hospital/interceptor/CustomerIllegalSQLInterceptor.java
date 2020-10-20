@@ -3,6 +3,7 @@ package com.zhiyun.hospital.interceptor;
 import com.zhiyun.hospital.exception.SqlStandardException;
 import com.zhiyun.hospital.util.Assert;
 import com.zhiyun.hospital.util.EncryptUtils;
+import com.zhiyun.hospital.util.InterceptorIgnoreHelper;
 import com.zhiyun.hospital.util.PluginUtils;
 import lombok.Data;
 import net.sf.jsqlparser.JSQLParserException;
@@ -317,7 +318,8 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         MappedStatement ms = mpStatementHandler.mappedStatement();
         Connection connection = (Connection)invocation.getArgs()[0];
         // 如果是insert操作 不进行验证
-        if (SqlCommandType.INSERT.equals(ms.getSqlCommandType())) {
+        //使用了@InterceptorIgnore且已经配置不进行校验
+        if (SqlCommandType.INSERT.equals(ms.getSqlCommandType())|| InterceptorIgnoreHelper.willIgnoreIllegalSql(ms.getId())) {
             return invocation.proceed();
         }
         if (CollectionUtils.isEmpty(paths) || (!CollectionUtils.isEmpty(paths) &&
