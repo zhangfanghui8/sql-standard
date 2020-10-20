@@ -123,19 +123,21 @@ public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implemen
     }
 
     protected void checkWhere(Expression where, String ex) {
-        Assert.notNull(where, ex);
+        Assert.notNull(where, "非法SQL，必须要有where条件");
         if (where instanceof EqualsTo) {
             // example: 1=1
             EqualsTo equalsTo = (EqualsTo)where;
             Expression leftExpression = equalsTo.getLeftExpression();
             Expression rightExpression = equalsTo.getRightExpression();
-            Assert.isFalse(leftExpression.toString().equals(rightExpression.toString()), ex);
+            Assert.isFalse(leftExpression.toString()
+                    .equals(rightExpression.toString()), "非法SQL，where条件中存在【1=1】条件");
         } else if (where instanceof NotEqualsTo) {
             // example: 1 != 2
             NotEqualsTo notEqualsTo = (NotEqualsTo)where;
             Expression leftExpression = notEqualsTo.getLeftExpression();
             Expression rightExpression = notEqualsTo.getRightExpression();
-            Assert.isTrue(leftExpression.toString().equals(rightExpression.toString()), ex);
+            Assert.isTrue(leftExpression.toString()
+                    .equals(rightExpression.toString()), "非法SQL，where条件中存在【1!=2】条件");
         }
         //继续判断 仅有一个条件 deleted = 0 的情况，防止全表更新
         if (where instanceof EqualsTo) {
@@ -144,9 +146,7 @@ public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implemen
             Expression rightExpression = equalsTo.getRightExpression();
             boolean logicDelCheck =
                 "deleted".equals(leftExpression.toString()) && "0".equals(rightExpression.toString());
-            if (logicDelCheck) {
-                throw new SqlStandardException(ex);
-            }
+            Assert.isFalse(logicDelCheck, "非法SQL，where条件中仅存在【deleted=0】条件");
         }
     }
 
