@@ -1,6 +1,6 @@
 package com.zhiyun.hospital.config;
 
-import com.baomidou.mybatisplus.core.toolkit.StringUtils;
+import com.baomidou.mybatisplus.core.toolkit.ArrayUtils;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.zhiyun.hospital.EnableSqlStandard;
 import com.zhiyun.hospital.interceptor.BlockAttackInnerBoostInterceptor;
@@ -16,7 +16,10 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.annotation.AnnotationUtils;
 
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * @author zhangfanghui
@@ -27,14 +30,14 @@ import java.util.Map;
 @Configurable
 @ConditionalOnClass({SqlSessionFactory.class})
 public class MybatisPlusGlobalConfig implements InitializingBean, ApplicationContextAware {
-    private String path = null;
+    private List<String> paths = null;
     private ApplicationContext applicationContext;
 
     @Bean
     @ConditionalOnMissingBean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
-        interceptor.addInnerInterceptor(new CustomerIllegalSQLInterceptor(path));
+        interceptor.addInnerInterceptor(new CustomerIllegalSQLInterceptor(paths));
         interceptor.addInnerInterceptor(new BlockAttackInnerBoostInterceptor());
         return interceptor;
     }
@@ -45,8 +48,10 @@ public class MybatisPlusGlobalConfig implements InitializingBean, ApplicationCon
         for (String key : beansWithAnnotation.keySet()) {
             EnableSqlStandard annotation =
                 AnnotationUtils.findAnnotation(beansWithAnnotation.get(key).getClass(), EnableSqlStandard.class);
-            if (null != annotation && StringUtils.isNotBlank(annotation.value())) {
-                path = annotation.value();
+            if (null != annotation && ArrayUtils.isNotEmpty(annotation.value())) {
+                paths = Stream.of(annotation.value()).collect(Collectors.toList());
+
+
             }
         }
     }

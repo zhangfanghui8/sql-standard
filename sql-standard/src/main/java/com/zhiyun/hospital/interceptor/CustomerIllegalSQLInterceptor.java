@@ -6,23 +6,24 @@ import com.baomidou.mybatisplus.core.toolkit.*;
 import com.baomidou.mybatisplus.extension.parser.JsqlParserSupport;
 import com.baomidou.mybatisplus.extension.plugins.inner.InnerInterceptor;
 import lombok.Data;
-import net.sf.jsqlparser.expression.BinaryExpression;
-import net.sf.jsqlparser.expression.Expression;
-import net.sf.jsqlparser.expression.Function;
-import net.sf.jsqlparser.expression.LongValue;
+import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.expression.*;
 import net.sf.jsqlparser.expression.operators.conditional.OrExpression;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.expression.operators.relational.InExpression;
 import net.sf.jsqlparser.expression.operators.relational.ItemsList;
 import net.sf.jsqlparser.expression.operators.relational.NotEqualsTo;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.select.*;
 import net.sf.jsqlparser.statement.update.Update;
 import org.apache.ibatis.executor.statement.StatementHandler;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.mapping.ParameterMapping;
 import org.apache.ibatis.mapping.SqlCommandType;
 
 import java.sql.Connection;
@@ -31,6 +32,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 
 /**
  * 由于开发人员水平参差不齐，即使订了开发规范很多人也不遵守
@@ -58,7 +60,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements InnerInterceptor {
 
-    private String path = null;
+    private List<String> paths = null;
     /**
      * 缓存验证结果，提高性能
      */
@@ -69,8 +71,8 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
     private static final Map<String, List<CustomerIllegalSQLInterceptor.IndexInfo>> indexInfoMap =
         new ConcurrentHashMap<>();
 
-    public CustomerIllegalSQLInterceptor(String path) {
-        this.path = path;
+    public CustomerIllegalSQLInterceptor(List<String> paths) {
+        this.paths = paths;
     }
 
     @Override
@@ -81,7 +83,8 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         if (sct == SqlCommandType.INSERT || InterceptorIgnoreHelper.willIgnoreIllegalSql(ms.getId())) {
             return;
         }
-        if (StringUtils.isBlank(path) || (StringUtils.isNotBlank(path) && ms.getId().contains(path))) {
+        if (CollectionUtils.isEmpty(paths) || (!CollectionUtils.isEmpty(paths) &&
+                paths.stream().anyMatch(path -> ms.getId().contains(path)))) {
             BoundSql boundSql = mpStatementHandler.boundSql();
             String originalSql = boundSql.getSql();
             logger.debug("检查SQL是否合规，SQL:" + originalSql);
@@ -90,6 +93,7 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
                 logger.debug("该SQL已验证，无需再次验证，，SQL:" + originalSql);
                 return;
             }
+            validLimit(boundSql,connection);
             parserSingle(originalSql, connection);
             //缓存验证结果
             cacheValidResult.add(md5Base64);
@@ -110,7 +114,6 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         Limit limit = plainSelect.getLimit();
         validWhere(where, table, (Connection)obj);
         validJoins(joins, table, (Connection)obj);
-        validLimit(limit);
     }
 
     @Override
@@ -205,12 +208,59 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
      * 验证limit条件
      * @param limit
      */
-    private void validLimit(Limit limit) {
-        if (limit != null){
-            LongValue offset = (LongValue)limit.getOffset();
-            long offsetValue = offset.getValue();
-            Assert.isFalse(offsetValue > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
+    /**
+     * 验证limit条件
+     * @param boundSql
+     * @param connection
+     */
+    private void validLimit(BoundSql boundSql, Connection connection) {
+        Statement statement = null;
+        String sql = boundSql.getSql();
+        try {
+            statement = CCJSqlParserUtil.parse(sql);
+        } catch (JSQLParserException e) {
+            logger.error("解析SQL出错， sql: "+sql,e);
         }
+        if (statement instanceof Select) {
+            Select select = (Select)statement;
+            PlainSelect plainSelect = (PlainSelect)select.getSelectBody();
+            Limit limit = plainSelect.getLimit();
+            if (limit != null ){
+                Expression offset = limit.getOffset();
+                if (offset instanceof LongValue){
+                    LongValue offsetLong = (LongValue)offset;
+                    long offsetValue = offsetLong.getValue();
+                    Assert.isFalse(offsetValue > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
+                }else if (offset instanceof JdbcParameter){
+                    try{
+                        List<ParameterMapping> parameterMappings = boundSql.getParameterMappings();
+                        Map paramMap = (Map)boundSql.getParameterObject();
+                        int total = parameterMappings.size();
+                        String[] limits = sql.split(" limit ");
+                        if (limits.length > 0){
+                            int question = (int) Stream.of(limits[1].split("")).filter("?"::equals).count();
+                            int index = total - question;
+                            ParameterMapping parameterMapping = parameterMappings.get(index);
+                            String property = parameterMapping.getProperty();
+                            Object value = paramMap.get(property);
+                            if (value instanceof Integer){
+                                Integer intValue = (Integer)value;
+                                Assert.isFalse(intValue > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
+                            }else if (value instanceof Long){
+                                Long longValue = (Long)value;
+                                Assert.isFalse(longValue.intValue() > 100000,"非法SQL，【limit】关键字offset数量必须小于等于100000");
+                            }
+                        }
+                    }catch (Exception ex){
+                        //暂不抛出该异常
+                        logger.error("含有limit解析异常 SQL："+sql,ex);
+                    }
+
+                }
+
+            }
+        }
+
     }
     /**
      * 检查是否使用索引

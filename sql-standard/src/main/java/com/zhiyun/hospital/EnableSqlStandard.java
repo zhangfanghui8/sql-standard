@@ -16,5 +16,5 @@ import java.lang.annotation.*;
 @Import(value = MybatisPlusGlobalConfig.class)
 public @interface EnableSqlStandard {
 
-    String value() default "";
+    String[] value() default "";
 }
