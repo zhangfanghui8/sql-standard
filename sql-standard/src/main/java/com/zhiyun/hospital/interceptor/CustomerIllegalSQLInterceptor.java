@@ -109,9 +109,9 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         Assert.notNull(where, "非法SQL，必须要有where条件");
         Table table = (Table)plainSelect.getFromItem();
         List<Join> joins = plainSelect.getJoins();
-        List<SelectItem> selectItem = plainSelect.getSelectItems();
-        if (CollectionUtils.isNotEmpty(selectItem)) {
-            validSelectItem(selectItem);
+        List<SelectItem> selectItems = plainSelect.getSelectItems();
+        if (CollectionUtils.isNotEmpty(selectItems)) {
+            selectItems.forEach(CustomerIllegalSQLInterceptor::validSelectItem);
         }
         Limit limit = plainSelect.getLimit();
         validWhere(where, table, (Connection)obj);
@@ -357,17 +357,17 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
     /**
      * 验证select item 部分规则
      *
-     * @param selectItems
+     * @param selectItem
      */
-    private static void validSelectItem(List<SelectItem> selectItems) {
-        //select语句禁止使用count(*)
-        if (selectItems.stream().filter(f -> (f.toString().toLowerCase().contains("count(*)"))).findFirst()
-            .isPresent()) {
-            throw new MybatisPlusException("非法SQL，SQL使用到'count(*)'");
+    private static void validSelectItem(SelectItem selectItem) {
+        String selectParam = selectItem.toString();
+        //select语句允许使用count(*)，判断
+        if (selectParam.toLowerCase().contains("count(*)")) {
+            return;
         }
-        //select语句禁止使用count(*)
-        if (selectItems.stream().filter(f -> (f.toString().contains("*"))).findFirst().isPresent()) {
-            throw new MybatisPlusException("非法SQL，SQL使用到'*'");
+        //select语句禁止使用*
+        else if (selectParam.contains("*")) {
+            throw new MybatisPlusException("非法SQL，SQL使用到'select *'");
         }
     }
 
