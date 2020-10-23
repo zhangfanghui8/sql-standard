@@ -2,13 +2,16 @@ package com.zhiyun.hospital.interceptor;
 
 import com.zhiyun.hospital.exception.SqlStandardException;
 import com.zhiyun.hospital.util.Assert;
+import com.zhiyun.hospital.util.CollectionUtils;
 import com.zhiyun.hospital.util.EncryptUtils;
 import com.zhiyun.hospital.util.InterceptorIgnoreHelper;
 import lombok.extern.slf4j.Slf4j;
+import net.sf.jsqlparser.expression.CaseExpression;
 import net.sf.jsqlparser.expression.Expression;
-import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
-import net.sf.jsqlparser.expression.operators.relational.NotEqualsTo;
+import net.sf.jsqlparser.expression.WhenClause;
+import net.sf.jsqlparser.expression.operators.relational.*;
 import net.sf.jsqlparser.statement.delete.Delete;
+import net.sf.jsqlparser.statement.insert.Insert;
 import net.sf.jsqlparser.statement.update.Update;
 import org.apache.ibatis.cache.CacheKey;
 import org.apache.ibatis.executor.Executor;
@@ -80,7 +83,7 @@ public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implemen
         }
         SqlCommandType sct = ms.getSqlCommandType();
         //在写入和删除的时候进行校验
-        if (sct == SqlCommandType.UPDATE || sct == SqlCommandType.DELETE) {
+        if (sct == SqlCommandType.UPDATE || sct == SqlCommandType.DELETE || sct == SqlCommandType.INSERT) {
             parserMulti(boundSql.getSql(), null);
         }
 
@@ -113,12 +116,29 @@ public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implemen
     }
 
     @Override
+    protected void processInsert(Insert insert, int index, Object obj) {
+        ItemsList itemsList = insert.getItemsList();
+        if (itemsList != null && itemsList instanceof MultiExpressionList){
+            List<ExpressionList> exprList = ((MultiExpressionList) itemsList).getExprList();
+            Assert.isFalse(exprList.size() > 10000,"非法SQL，【values】批量插入的数量不可超过10000条");
+        }
+    }
+    @Override
     protected void processDelete(Delete delete, int index, Object obj) {
         this.checkWhere(delete.getWhere(), "Prohibition of full table deletion");
     }
 
     @Override
     protected void processUpdate(Update update, int index, Object obj) {
+        List<Expression> expressions = update.getExpressions();
+        if (CollectionUtils.isNotEmpty(expressions)){
+            //判断批量更新数量小于10000个
+            Expression expression = expressions.get(0);
+            if (expression != null & expression instanceof CaseExpression){
+                List<WhenClause> whenClauses = ((CaseExpression) expression).getWhenClauses();
+                Assert.isFalse(whenClauses.size() > 10000,"非法SQL，【case when】批量更新的数量不可超过10000条");
+            }
+        }
         this.checkWhere(update.getWhere(), "Prohibition of table update operation");
     }
 

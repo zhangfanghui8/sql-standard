@@ -92,8 +92,9 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
 //            throw new SqlStandardException("非法SQL，where条件中不能使用【or】关键字，错误or信息：" + orExpression.toString());
         } else if (expression instanceof NotEqualsTo) {
             NotEqualsTo notEqualsTo = (NotEqualsTo)expression;
-            if(notEqualsTo.getStringExpression().trim().contains("!=")){
-                throw new SqlStandardException("非法SQL，where条件中不能使用【!=】关键字，错误!=信息：" + notEqualsTo.toString());
+            String notEqualsToStr = notEqualsTo.getStringExpression().trim();
+            if(notEqualsToStr.contains("!=")|| notEqualsToStr.contains("<>")){
+                throw new SqlStandardException("非法SQL，where条件中不能使用【!= 或 <>】关键字，错误!=信息：" + notEqualsTo.toString());
             }
         } else if (expression instanceof BinaryExpression) {
             BinaryExpression binaryExpression = (BinaryExpression)expression;
