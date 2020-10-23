@@ -52,6 +52,7 @@ public class SqlStandardConfig implements InitializingBean, ApplicationContextAw
         configuration.addInterceptor(new BlockAttackInnerBoostInterceptor());
         configuration.addInterceptor(new CustomerIllegalSQLInterceptor(paths));
         Properties configurationProperties = mybatisProperties.getConfigurationProperties();
+        //该拦截器放到最后
         PerformanceInterceptor performanceInterceptor = new PerformanceInterceptor();
         performanceInterceptor.setProperties(configurationProperties);
         configuration.addInterceptor(performanceInterceptor);

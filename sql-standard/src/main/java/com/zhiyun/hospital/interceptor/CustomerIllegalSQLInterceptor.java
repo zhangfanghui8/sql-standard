@@ -237,16 +237,16 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
     /**
      * 验证select item 部分规则
      *
-     * @param selectItems
+     * @param selectItem
      */
-    private static void validSelectItem(List<SelectItem> selectItems) {
-        //select语句禁止使用count(*)
-        if (selectItems.stream().filter(f -> (f.toString().toLowerCase().contains("count(*)"))).findFirst()
-            .isPresent()) {
-            throw new SqlStandardException("非法SQL，SQL使用到'count(*)'");
+    private static void validSelectItem(SelectItem selectItem) {
+        String selectParam = selectItem.toString();
+        //select语句允许使用count(*)，判断
+        if (selectParam.toLowerCase().contains("count(*)")) {
+            return;
         }
         //select语句禁止使用*
-        if (selectItems.stream().filter(f -> (f.toString().contains("*"))).findFirst().isPresent()) {
+        else if (selectParam.contains("*")) {
             throw new SqlStandardException("非法SQL，SQL使用到'select *'");
         }
     }
@@ -400,7 +400,7 @@ public class CustomerIllegalSQLInterceptor extends JsqlParserSupport implements 
         List<Join> joins = plainSelect.getJoins();
         List<SelectItem> selectItems = plainSelect.getSelectItems();
         if (!CollectionUtils.isEmpty(selectItems)) {
-            validSelectItem(selectItems);
+            selectItems.forEach(CustomerIllegalSQLInterceptor::validSelectItem);
         }
         validWhere(where, table, (Connection)obj);
         validJoins(joins, table, (Connection)obj);
