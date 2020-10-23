@@ -4,15 +4,18 @@ package com.zhiyun.hospital.interceptor;
 import com.baomidou.mybatisplus.core.exceptions.MybatisPlusException;
 import com.baomidou.mybatisplus.core.plugins.InterceptorIgnoreHelper;
 import com.baomidou.mybatisplus.core.toolkit.Assert;
+import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 import com.baomidou.mybatisplus.core.toolkit.EncryptUtils;
 import com.baomidou.mybatisplus.core.toolkit.PluginUtils;
 import com.baomidou.mybatisplus.extension.parser.JsqlParserSupport;
 import com.baomidou.mybatisplus.extension.plugins.inner.InnerInterceptor;
 import lombok.extern.slf4j.Slf4j;
+import net.sf.jsqlparser.expression.CaseExpression;
 import net.sf.jsqlparser.expression.Expression;
-import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
-import net.sf.jsqlparser.expression.operators.relational.NotEqualsTo;
+import net.sf.jsqlparser.expression.WhenClause;
+import net.sf.jsqlparser.expression.operators.relational.*;
 import net.sf.jsqlparser.statement.delete.Delete;
+import net.sf.jsqlparser.statement.insert.Insert;
 import net.sf.jsqlparser.statement.update.Update;
 import org.apache.ibatis.executor.statement.StatementHandler;
 import org.apache.ibatis.mapping.BoundSql;
@@ -74,7 +77,7 @@ public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implemen
             return;
         }
         SqlCommandType sct = ms.getSqlCommandType();
-        if (sct == SqlCommandType.UPDATE || sct == SqlCommandType.DELETE) {
+        if (sct == SqlCommandType.UPDATE || sct == SqlCommandType.DELETE || sct == SqlCommandType.INSERT) {
             parserMulti(boundSql.getSql(), null);
         }
         //拦截使用$的sql
@@ -102,6 +105,15 @@ public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implemen
         //缓存验证结果
         cacheValidResult.add(md5Base64);
     }
+
+    @Override
+    protected void processInsert(Insert insert, int index, Object obj) {
+        ItemsList itemsList = insert.getItemsList();
+        if (itemsList != null && itemsList instanceof MultiExpressionList){
+            List<ExpressionList> exprList = ((MultiExpressionList) itemsList).getExprList();
+            Assert.isFalse(exprList.size() > 10000,"非法SQL，【values】批量插入的数量不可超过10000条");
+        }
+    }
     @Override
     protected void processDelete(Delete delete, int index, Object obj) {
         this.checkWhere(delete.getWhere(), "Prohibition of full table deletion");
@@ -109,6 +121,15 @@ public class BlockAttackInnerBoostInterceptor extends JsqlParserSupport implemen
 
     @Override
     protected void processUpdate(Update update, int index, Object obj) {
+        List<Expression> expressions = update.getExpressions();
+        if (CollectionUtils.isNotEmpty(expressions)){
+            //判断批量更新数量小于10000个
+            Expression expression = expressions.get(0);
+            if (expression != null & expression instanceof CaseExpression){
+                List<WhenClause> whenClauses = ((CaseExpression) expression).getWhenClauses();
+                Assert.isFalse(whenClauses.size() > 10000,"非法SQL，【case when】批量更新的数量不可超过10000条");
+            }
+        }
         this.checkWhere(update.getWhere(), "Prohibition of table update operation");
     }
     protected void checkWhere(Expression where, String ex) {
