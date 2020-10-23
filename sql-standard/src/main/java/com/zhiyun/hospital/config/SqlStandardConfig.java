@@ -3,11 +3,13 @@ package com.zhiyun.hospital.config;
 import com.zhiyun.hospital.EnableSqlStandard;
 import com.zhiyun.hospital.interceptor.BlockAttackInnerBoostInterceptor;
 import com.zhiyun.hospital.interceptor.CustomerIllegalSQLInterceptor;
+import com.zhiyun.hospital.interceptor.PerformanceInterceptor;
 import com.zhiyun.hospital.util.ArrayUtils;
 import com.zhiyun.hospital.util.InterceptorIgnoreHelper;
 import org.apache.ibatis.binding.MapperRegistry;
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSessionFactory;
+import org.mybatis.spring.boot.autoconfigure.MybatisProperties;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +38,8 @@ public class SqlStandardConfig implements InitializingBean, ApplicationContextAw
     private ApplicationContext applicationContext;
     @Autowired
     SqlSessionFactory sqlSessionFactory;
+    @Autowired
+    MybatisProperties mybatisProperties;
 
     /**
      * 增加过滤器
@@ -47,6 +51,11 @@ public class SqlStandardConfig implements InitializingBean, ApplicationContextAw
         }
         configuration.addInterceptor(new BlockAttackInnerBoostInterceptor());
         configuration.addInterceptor(new CustomerIllegalSQLInterceptor(paths));
+        Properties configurationProperties = mybatisProperties.getConfigurationProperties();
+        PerformanceInterceptor performanceInterceptor = new PerformanceInterceptor();
+        performanceInterceptor.setProperties(configurationProperties);
+        configuration.addInterceptor(performanceInterceptor);
+
     }
 
     @Override

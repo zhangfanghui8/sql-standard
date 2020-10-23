@@ -54,6 +54,14 @@ public final class StringUtils {
      */
     private static final Pattern CAPITAL_MODE = Pattern.compile("^[0-9A-Z/_]+$");
 
+
+    public static boolean isEmpty(String str) {
+        return str == null || str.length() == 0;
+    }
+
+    public static boolean isNotEmpty(String str) {
+        return !isEmpty(str);
+    }
     /**
      * 判断字符串中是否全是空白字符
      *
