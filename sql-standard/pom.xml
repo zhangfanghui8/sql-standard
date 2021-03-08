@@ -50,12 +50,12 @@
         <repository>
             <id>releases</id>
             <name>releases</name>
-            <url>http://nexus.91jkys.com/content/repositories/releases/</url>
+            <url>http://nexus.example.com/content/repositories/releases</url>
         </repository>
         <snapshotRepository>
             <id>snapshots</id>
             <name>snapshots</name>
-            <url>http://nexus.91jkys.com/content/repositories/snapshots/</url>
+            <url>http://nexus.example.com/content/repositories/releases</url>
         </snapshotRepository>
     </distributionManagement>
 </project>
